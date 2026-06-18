@@ -1,0 +1,40 @@
+{
+  "summary": "Full end-to-end test of 1471 Horwich Squadron site. Backend: 16/16 pytest passing (auth login success/fail, /auth/me bearer, public enquiry create with consent validation 400, invalid email 422, short name 422, admin list/patch/delete CRUD with 401 unauth checks). Frontend: public landing loads, header + 8 nav buttons render, mobile menu opens/closes correctly, Join section pathways selectable, enquiry form validation (name/email/message/consent inline errors) works, invalid-email + no-consent path errors shown, valid submission shows success toast and resets the form. Admin: wrong credentials show 'Invalid email or password', correct creds open dashboard, all 4 filters (all/new/read/actioned) clickable, mark-read / mark-actioned / delete actions all work against the live backend, logout returns to login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/enquiries", "issue": "Returns 200 instead of 201 on create (PRD mentions 201/200, current implementation responds 200). Functional but not REST-idiomatic."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Optional: change @api_router.post('/enquiries') to return status_code=201 for stricter REST compliance (not blocking).",
+    "Reminder: RESEND_API_KEY is intentionally empty - emails are stored only; surface this in admin UI or a banner when user is ready to enable email sending."
+  ],
+  "critical_code_review_comments": [
+    "server.py uses deprecated FastAPI @app.on_event('startup'/'shutdown') - migrate to lifespan context manager before FastAPI removes the API.",
+    "JWT_SECRET is committed in backend/.env (visible in repo) - rotate before production and load via secret store.",
+    "CORS_ORIGINS defaults to '*' with allow_credentials=True - browsers will refuse credentialed requests; pin to explicit origin(s) for production.",
+    "Admin token stored in localStorage - acceptable for this app size but vulnerable to XSS; httpOnly cookies would be safer if scope grows.",
+    "Brute-force protection (lockout after N failed logins) is not implemented for /api/auth/login - consider rate-limiting middleware before launch.",
+    "send_enquiry_email failure is swallowed (logged only); fine for now while RESEND_API_KEY is empty, but once enabled consider surfacing failures to admin."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend.py (new)",
+    "/app/test_reports/pytest/pytest_results.xml (generated)"
+  ],
+  "success_rate": {"backend": "100% (16/16)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created and cleaned up TEST_ prefixed enquiries via teardown_module; one UI-submitted enquiry was deleted via admin dashboard during the test (verified by zero rows on follow-up login).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Pytest suite lives at /app/backend/tests/test_backend.py and is self-contained (uses REACT_APP_BACKEND_URL). Frontend Playwright covered Join form (validation + success), all admin CRUD actions (filters, mark-read, mark-actioned, delete, logout) and mobile menu toggle. RESEND_API_KEY is intentionally blank by design; emails are not sent. JWT token key in localStorage is 'horwich_admin_token'."
+}

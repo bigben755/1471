@@ -12,7 +12,18 @@ module.exports = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)'
       },
+      fontFamily: {
+        display: ['"Cabinet Grotesk"', 'Public Sans', 'Arial', 'sans-serif'],
+        sans: ['"Public Sans"', 'Arial', 'sans-serif'],
+      },
       colors: {
+        raf: {
+          blue: '#002F5F',
+          red: '#C60C30',
+          navy: '#071A2F',
+          sky: '#EAF5F8',
+          slate: '#51626F',
+        },
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         card: {
