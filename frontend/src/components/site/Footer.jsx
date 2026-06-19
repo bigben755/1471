@@ -85,7 +85,7 @@ export const Footer = () => (
         </p>
         <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-white/45">
           <span>&copy; {new Date().getFullYear()} 1471 Horwich Squadron RAF Air Cadets</span>
-          <a data-testid="footer-admin-link" href="/admin" className="hover:text-white/80 transition-colors">Squadron admin</a>
+          <a data-testid="footer-admin-link" href="/portal" className="hover:text-white/80 transition-colors">Members area sign in</a>
         </div>
       </div>
     </div>

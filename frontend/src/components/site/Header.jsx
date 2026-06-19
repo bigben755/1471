@@ -79,6 +79,15 @@ export const Header = () => {
                 {item.label}
               </button>
             ))}
+            <a
+              data-testid="nav-signin"
+              href="/portal"
+              className={`px-3 py-2 text-sm font-medium rounded-sm transition-colors ${
+                scrolled ? "text-raf-navy hover:text-raf-red" : "text-white/90 hover:text-white"
+              }`}
+            >
+              Sign in
+            </a>
             <button
               data-testid="nav-join-cta"
               onClick={() => handleNav("#join")}
@@ -119,6 +128,13 @@ export const Header = () => {
               {item.label}
             </button>
           ))}
+          <a
+            data-testid="mobile-nav-signin"
+            href="/portal"
+            className="text-left py-4 text-2xl font-display font-bold text-raf-sky border-b border-white/10 hover:text-raf-red transition-colors"
+          >
+            Members sign in
+          </a>
         </nav>
       </div>
     </header>

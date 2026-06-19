@@ -1,0 +1,52 @@
+{
+  "summary": "End-to-end test of Phase 2 Members Portal (FastAPI + React + MongoDB). Backend: 26/26 pytest cases pass (multi-role login, /auth/me, wrong-password 401, role enforcement 401/403, users CRUD + reset-pw + duplicate-email + cannot-delete-admin, events CRUD + bid toggle + capacity-full 400 + attendance awards points + volunteer-streak, notices create/delete/pending/ack flow, member<->staff messages, change-password wrong-current 400). Frontend: signed in as admin, cadet and parent; verified wrong-password error, full notices-gate appears for cadet and is dismissed by notice-ack-button, role-correct tabs (parent only sees Calendar/Notices/Messages/Account; cadet has Points instead of Members/Enquiries; staff has full set), admin can create+delete a notice, create an event, list members & enquiries; cadet can post a message and sees it back; change-password rejects wrong current. Seeded data observed via UI: 4 demo events incl. RAF Cosford Visit (premium) and Remembrance Parade Support (volunteer) - calendar renders Monday-first with green/amber/red chips and a legend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/enquiries, /api/users, /api/events, /api/notices", "issue": "All return 200 instead of 201 on resource creation (REST convention)"},
+      {"endpoint": "POST /api/auth/login", "issue": "No brute-force lockout / rate limit; unlimited wrong-password attempts allowed"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "MessagesPanel", "issue": "React 'Encountered two children with the same key' warning when posting a new message (likely the just-sent message also returned by refetch causing dup id)", "selector": "[data-testid='message-list']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "All shadcn dialogs (event-form, notice-form, user-form, event-dialog)", "issues": ["Radix Dialog accessibility warning: 'Missing Description or aria-describedby' on every DialogContent - add a <DialogDescription> or aria-describedby for screen-reader compliance"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_portal.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_portal.xml"
+  ],
+  "action_items": [
+    "Fix duplicate React key warning in MessagesPanel (likely dedupe by id when concatenating local + fetched messages, or rely solely on refetch).",
+    "Add <DialogDescription> (or aria-describedby) to every shadcn DialogContent (EventDialog, EventFormDialog, NoticeFormDialog, UserFormDialog) for a11y.",
+    "Consider returning 201 from POST creators (/api/users, /api/events, /api/notices, /api/enquiries) for REST correctness.",
+    "Add a login rate-limit / lockout after N failed attempts (currently unlimited).",
+    "Migrate FastAPI deprecated @app.on_event startup/shutdown to lifespan context manager.",
+    "Pin CORS_ORIGINS to explicit production origins (currently defaults to '*' with allow_credentials=True - browsers will block credentialed requests in prod)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 706 lines - approaching the 700-line guideline; split into routers (auth/users/events/notices/messages/enquiries) before it grows further.",
+    "compute_member_stats is invoked inside list_users for every cadet (N+1 query) - fine for a small squadron but switch to a single aggregation when membership scales.",
+    "JWT secret + admin password still committed in backend/.env - rotate before production.",
+    "Token in localStorage (XSS-vulnerable) - acceptable for now; consider httpOnly cookie when scope grows.",
+    "POST /api/events/{id}/bid silently toggles - safer to expose explicit PUT/DELETE so the client cannot accidentally withdraw on a double-click; current UI shows 'Withdraw' state but the API is still toggle-on-toggle.",
+    "Welcome-notice acknowledgement state is stored per-user (notice_acks) - correct; verified that re-login for an already-acked user goes straight to dashboard.",
+    "/api/messages/threads aggregation uses 'member_name' from the last message; if a member's name changes after their first message, threads will show stale name. Minor."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_portal.py (new - 26 pytest cases)",
+    "/app/test_reports/pytest/pytest_portal.xml (junit output)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471!, cfav@1471horwich.org.uk / Cfav1471!, cadet@1471horwich.org.uk / Cadet1471!, parent@1471horwich.org.uk / Parent1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Tests created TEST_-prefixed users/events/notices/messages and cleaned them up in teardown_module. No production data modified. Cadet's welcome-notice ack state was set during UI testing - this is per-user and expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two pytest files exist: /app/backend/tests/test_backend.py (Phase 1 - public site + enquiries) and /app/backend/tests/test_portal.py (Phase 2 - portal). Run with REACT_APP_BACKEND_URL=https://raf-horwich.preview.emergentagent.com pytest backend/tests/ -v. Cadet's welcome notice has already been acknowledged in MongoDB; to re-test the gate, delete the matching row in notice_acks for that user. Frontend testids follow stable patterns (tab-{key}, user-{id}, edit-bonus-{id}, bonus-input-{id}, bonus-save-{id}, etc.).",
+  "rca of the issue": "None - all required features working. Two minor frontend issues noted: (1) duplicate React key on message send (RCA: MessagesPanel likely optimistically appends a temp message then refetches the canonical list which contains the same id; fix by dedupe-by-id or replacing instead of appending), (2) aria-describedby missing on every DialogContent (RCA: shadcn Dialog requires either <DialogDescription> child or aria-describedby attr; missing both raises Radix dev warning)."
+}
