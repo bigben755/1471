@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { api, ROLE_LABELS } from "../../api";
 import { toast } from "sonner";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "../ui/dialog";
 import { Loader2 } from "lucide-react";
 
@@ -52,7 +52,7 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent data-testid="user-form" className="max-w-md max-h-[90vh] overflow-y-auto rounded-none">
-        <DialogHeader><DialogTitle className="font-display text-raf-navy">{editing ? "Edit member" : "New member account"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-raf-navy">{editing ? "Edit member" : "New member account"}</DialogTitle><DialogDescription className="sr-only">Member account form</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <input data-testid="user-email" className={inp} placeholder="Email" type="email" value={form.email} disabled={!!editing} onChange={(e) => f("email", e.target.value)} />
           <div className="grid grid-cols-2 gap-3">

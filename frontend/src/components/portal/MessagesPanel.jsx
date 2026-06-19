@@ -23,7 +23,7 @@ export const MessagesPanel = () => {
     setBusy(true);
     try {
       const { data } = await api.post("/messages/thread", { body: body.trim() });
-      setMessages((m) => [...m, data]);
+      setMessages((m) => [...m.filter((x) => x.id !== data.id), data]);
       setBody("");
     } catch { toast.error("Could not send message."); }
     finally { setBusy(false); }

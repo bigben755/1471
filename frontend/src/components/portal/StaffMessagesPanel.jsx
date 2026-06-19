@@ -32,7 +32,7 @@ export const StaffMessagesPanel = () => {
     setBusy(true);
     try {
       const { data } = await api.post(`/messages/thread/${active.member_id}`, { body: body.trim() });
-      setMessages((m) => [...m, data]);
+      setMessages((m) => [...m.filter((x) => x.id !== data.id), data]);
       setBody("");
     } catch { toast.error("Could not send reply."); }
     finally { setBusy(false); }

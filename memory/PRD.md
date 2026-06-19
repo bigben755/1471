@@ -40,3 +40,25 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 ## Next tasks
 1. When user provides Resend key: set RESEND_API_KEY + NOTIFY_EMAIL in backend/.env, restart, verify email delivery.
 2. Consider splitting anchors into routed pages as content grows.
+
+---
+
+# Members Portal (Phase 1) — implemented 2026-06-18
+
+## Scope delivered
+- Multi-role JWT auth + sign-in at `/portal` (admin, cfav, cadet, parent). Old `/admin` → redirects to `/portal`.
+- Mandatory in-app notices gate: notices flagged `requires_ack` must be acknowledged on login before the dashboard loads (per-user ack state).
+- Role-based dashboards:
+  - Cadet: events calendar (bidding, green/amber/red capacity), points & streaks, notices, message board, account/password.
+  - Parent: calendar, notices, message board, account.
+  - CFAV/Admin: create/edit events + mark attendance (awards points), manage members (create/assign type/link parent↔cadet/reset password/edit bonus points), post notices (optional push/ack), view & action enquiries + create accounts from them, staff message threads, account.
+- Points = attended-event points + staff bonus; Streak = attended volunteer events. Premium events flagged.
+- Seed: admin/cfav/cadet/parent demo accounts (see test_credentials.md), 4 demo events, 1 welcome ack-notice.
+- Verified: testing agent iteration_2 — 26/26 backend pytest + 100% frontend flows. Minor warnings (dup message key, dialog aria) fixed.
+
+## Portal backlog (Phase 2)
+- P1: Event photo galleries (object storage) with optional public visibility for recruitment; parents view photos.
+- P1: Blogs (in-app) + later Facebook auto-post (needs Meta Page token).
+- P2: Word (.docx) training-programme import → calendar events.
+- P2: Real browser web-push; forgot-password email (Resend); split server.py into routers; 201 status codes; login rate-limiting; pin CORS for production.
+

@@ -90,7 +90,7 @@ export const NoticesPanel = ({ canManage }) => {
       {canManage && (
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent data-testid="notice-form" className="max-w-lg rounded-none">
-            <DialogHeader><DialogTitle className="font-display text-raf-navy">New notice</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="font-display text-raf-navy">New notice</DialogTitle><DialogDescription className="sr-only">Create a squadron notice</DialogDescription></DialogHeader>
             <div className="space-y-3">
               <input data-testid="notice-title" className={inp} placeholder="Notice title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
               <textarea data-testid="notice-body" className={inp} rows={4} placeholder="Message" value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} />

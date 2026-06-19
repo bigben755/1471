@@ -6,7 +6,7 @@ import { Calendar, UpcomingList } from "./Calendar";
 import { EventDialog } from "./EventDialog";
 import { PanelHeading } from "./PortalShell";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "../ui/dialog";
 import { Plus, Loader2, Trash2 } from "lucide-react";
 
@@ -69,7 +69,7 @@ function EventForm({ open, onClose, onSaved, editing }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent data-testid="event-form" className="max-w-lg max-h-[90vh] overflow-y-auto rounded-none">
-        <DialogHeader><DialogTitle className="font-display text-raf-navy">{editing ? "Edit event" : "New event"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="font-display text-raf-navy">{editing ? "Edit event" : "New event"}</DialogTitle><DialogDescription className="sr-only">Event form</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <input data-testid="event-title" className={inp} placeholder="Event title" value={form.title} onChange={(e) => f("title", e.target.value)} />
           <textarea className={inp} rows={3} placeholder="Description" value={form.description} onChange={(e) => f("description", e.target.value)} />

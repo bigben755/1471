@@ -3,7 +3,7 @@ import { api } from "../../api";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "../ui/dialog";
 import { MapPin, Calendar as CalIcon, Users, Star, Award, Loader2, Check } from "lucide-react";
 
@@ -71,6 +71,7 @@ export const EventDialog = ({ event, open, onClose, onChanged }) => {
             {detail.event_type === "premium" && <Star size={18} className="text-amber-500" />}
             {detail.title}
           </DialogTitle>
+          <DialogDescription className="sr-only">Event details, capacity and bidding</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 text-sm text-raf-slate">
