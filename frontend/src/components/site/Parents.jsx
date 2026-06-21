@@ -1,9 +1,11 @@
 import { PARENT_CARDS } from "../../data/content";
+import { useNavigate } from "react-router-dom";
 import { Reveal, SectionHeading } from "./Reveal";
-import { goToJoin } from "../../utils/nav";
 import { ArrowRight } from "lucide-react";
 
-export const Parents = () => (
+export const Parents = () => {
+  const navigate = useNavigate();
+  return (
   <section id="parents" data-testid="parents-section" className="py-20 md:py-28 bg-white">
     <div className="max-w-7xl mx-auto px-5 md:px-10">
       <Reveal>
@@ -42,7 +44,7 @@ export const Parents = () => (
           </p>
           <button
             data-testid="parents-ask-cta"
-            onClick={() => goToJoin("Parent/Carer Enquiry")}
+            onClick={() => navigate("/join", { state: { enquiryType: "Parent/Carer Enquiry" } })}
             className="inline-flex items-center gap-2 px-7 py-3.5 bg-white text-raf-navy font-semibold hover:bg-raf-sky transition-colors whitespace-nowrap"
           >
             Ask a question <ArrowRight size={18} />
@@ -51,4 +53,5 @@ export const Parents = () => (
       </Reveal>
     </div>
   </section>
-);
+  );
+};

@@ -14,14 +14,14 @@ export const CLOUDS_WIDE =
   "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920";
 
 export const NAV_ITEMS = [
-  { label: "Home", href: "#home" },
-  { label: "About", href: "#about" },
-  { label: "Activities", href: "#activities" },
-  { label: "Cadets", href: "#cadets" },
-  { label: "Parents", href: "#parents" },
-  { label: "Volunteer", href: "#volunteer" },
-  { label: "FAQ", href: "#faq" },
-  { label: "Join", href: "#join" },
+  { label: "Home", to: "/" },
+  { label: "About", to: "/about" },
+  { label: "Activities", to: "/activities" },
+  { label: "Cadets", to: "/cadets" },
+  { label: "Parents", to: "/parents" },
+  { label: "Volunteer", to: "/volunteer" },
+  { label: "FAQ", to: "/faq" },
+  { label: "Join", to: "/join" },
 ];
 
 export const HIGHLIGHTS = [

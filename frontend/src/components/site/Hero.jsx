@@ -1,9 +1,11 @@
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { CREST_URL, SKY_HERO, HIGHLIGHTS, VENUE } from "../../data/content";
 import { Roundel } from "./Motifs";
-import { goToJoin, scrollToId } from "../../utils/nav";
 
 export const Hero = () => {
+  const navigate = useNavigate();
+  const join = (enquiryType) => navigate("/join", { state: { enquiryType } });
   return (
     <section
       id="home"
@@ -71,21 +73,21 @@ export const Hero = () => {
             >
               <button
                 data-testid="hero-join-cadet"
-                onClick={() => goToJoin("Join as a Cadet")}
+                onClick={() => join("Join as a Cadet")}
                 className="px-7 py-3.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors"
               >
                 Join as a Cadet
               </button>
               <button
                 data-testid="hero-become-volunteer"
-                onClick={() => goToJoin("Adult Volunteer Enquiry")}
+                onClick={() => join("Adult Volunteer Enquiry")}
                 className="px-7 py-3.5 bg-white text-raf-navy font-semibold hover:bg-raf-sky transition-colors"
               >
                 Become an Adult Volunteer
               </button>
               <button
                 data-testid="hero-message-squadron"
-                onClick={() => scrollToId("#join")}
+                onClick={() => join("General Enquiry")}
                 className="px-7 py-3.5 border-2 border-white/70 text-white font-semibold hover:bg-white hover:text-raf-navy transition-colors"
               >
                 Message the Squadron

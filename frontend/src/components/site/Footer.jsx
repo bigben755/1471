@@ -1,9 +1,11 @@
+import { useNavigate } from "react-router-dom";
 import { CREST_URL, LINKS, VENUE, NAV_ITEMS } from "../../data/content";
 import { Roundel, SwooshDivider } from "./Motifs";
-import { scrollToId } from "../../utils/nav";
 import { Facebook, ExternalLink, MapPin, Clock } from "lucide-react";
 
-export const Footer = () => (
+export const Footer = () => {
+  const navigate = useNavigate();
+  return (
   <footer data-testid="site-footer" className="relative bg-raf-navy text-white overflow-hidden">
     <SwooshDivider fill="#071A2F" className="-mt-px" />
     <Roundel className="absolute -right-24 -bottom-24 w-80 h-80 opacity-[0.06]" />
@@ -39,10 +41,10 @@ export const Footer = () => (
           <h4 className="text-xs uppercase tracking-[0.2em] text-raf-sky font-semibold">Explore</h4>
           <ul className="mt-5 space-y-3">
             {NAV_ITEMS.map((item) => (
-              <li key={item.href}>
+              <li key={item.to}>
                 <button
                   data-testid={`footer-nav-${item.label.toLowerCase()}`}
-                  onClick={() => scrollToId(item.href)}
+                  onClick={() => navigate(item.to)}
                   className="text-white/75 hover:text-white transition-colors"
                 >
                   {item.label}
@@ -90,4 +92,5 @@ export const Footer = () => (
       </div>
     </div>
   </footer>
-);
+  );
+};

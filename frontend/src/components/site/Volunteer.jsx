@@ -1,10 +1,12 @@
 import { VOLUNTEER_ROLES } from "../../data/content";
+import { useNavigate } from "react-router-dom";
 import { Reveal, SectionHeading } from "./Reveal";
 import { Roundel } from "./Motifs";
-import { goToJoin } from "../../utils/nav";
 import { ArrowRight } from "lucide-react";
 
-export const Volunteer = () => (
+export const Volunteer = () => {
+  const navigate = useNavigate();
+  return (
   <section
     id="volunteer"
     data-testid="volunteer-section"
@@ -58,7 +60,7 @@ export const Volunteer = () => (
             </p>
             <button
               data-testid="volunteer-cta"
-              onClick={() => goToJoin("Adult Volunteer Enquiry")}
+              onClick={() => navigate("/join", { state: { enquiryType: "Adult Volunteer Enquiry" } })}
               className="mt-6 inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors"
             >
               Become an Adult Volunteer <ArrowRight size={18} />
@@ -68,4 +70,5 @@ export const Volunteer = () => (
       </div>
     </div>
   </section>
-);
+  );
+};

@@ -1,10 +1,12 @@
 import { CADET_BULLETS, CLOUDS_WIDE } from "../../data/content";
+import { useNavigate } from "react-router-dom";
 import { Reveal } from "./Reveal";
 import { Roundel } from "./Motifs";
-import { goToJoin } from "../../utils/nav";
 import { Check, ArrowRight } from "lucide-react";
 
-export const Cadets = () => (
+export const Cadets = () => {
+  const navigate = useNavigate();
+  return (
   <section
     id="cadets"
     data-testid="cadets-section"
@@ -39,7 +41,7 @@ export const Cadets = () => (
             </p>
             <button
               data-testid="cadets-register-cta"
-              onClick={() => goToJoin("Join as a Cadet")}
+              onClick={() => navigate("/join", { state: { enquiryType: "Join as a Cadet" } })}
               className="mt-8 inline-flex items-center gap-2 px-7 py-3.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors"
             >
               Register your interest <ArrowRight size={18} />
@@ -65,4 +67,5 @@ export const Cadets = () => (
       </div>
     </div>
   </section>
-);
+  );
+};

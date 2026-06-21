@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { JOIN_PATHWAYS, ENQUIRY_TYPES } from "../../data/content";
 import { Reveal, SectionHeading } from "./Reveal";
-import { goToJoin } from "../../utils/nav";
 import { Loader2, Send, ShieldCheck } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -17,16 +17,20 @@ const emptyForm = {
 };
 
 export const Join = () => {
+  const location = useLocation();
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    const handler = (e) =>
-      setForm((f) => ({ ...f, enquiry_type: e.detail }));
-    window.addEventListener("set-enquiry", handler);
-    return () => window.removeEventListener("set-enquiry", handler);
-  }, []);
+    const preset = location.state?.enquiryType;
+    if (preset) setForm((f) => ({ ...f, enquiry_type: preset }));
+  }, [location.state]);
+
+  const selectPathway = (key) => {
+    setForm((f) => ({ ...f, enquiry_type: key }));
+    document.getElementById("enquiry-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
 
   const validate = () => {
     const er = {};
@@ -77,7 +81,7 @@ export const Join = () => {
             <Reveal key={p.key} delay={i * 0.08}>
               <button
                 data-testid={`join-pathway-${i}`}
-                onClick={() => goToJoin(p.key)}
+                onClick={() => selectPathway(p.key)}
                 className={`group w-full text-left h-full p-7 border transition-all ${
                   form.enquiry_type === p.key
                     ? "bg-raf-blue border-raf-blue"
@@ -106,6 +110,7 @@ export const Join = () => {
 
         <Reveal delay={0.1}>
           <form
+            id="enquiry-form"
             data-testid="enquiry-form"
             onSubmit={submit}
             className="mt-10 max-w-3xl mx-auto bg-white border border-raf-sky p-7 md:p-10"

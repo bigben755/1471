@@ -24,6 +24,7 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - Brand-safe imagery (aviation/sky/glider, no faces). Careful, non-committal activity wording.
 
 ## Implemented (2026-06-18)
+- Multi-page public site (React Router): Home, About, Activities, Cadets, Parents, Volunteer, FAQ, Join — persistent Header/Footer via Layout, scroll-to-top on route change, per-page SEO titles/descriptions, Organisation JSON-LD site-wide + FAQ JSON-LD on /faq. Header is transparent over the Home hero and solid/sticky on inner pages with active-link highlighting. CTAs deep-link to /join with a preselected enquiry type via router state.
 - Full responsive landing page with all required sections, RAFAC-compliant styling, crest used tastefully.
 - Backend: `/api/auth/login`, `/api/auth/me`, `/api/enquiries` (POST public, GET/PATCH/DELETE admin), `/api/enquiries/stats`. Admin seeded from env.
 - Admin panel at `/admin`: login, enquiry list, status filters, mark read/actioned, delete, stats cards.
