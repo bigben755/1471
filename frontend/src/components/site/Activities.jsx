@@ -1,8 +1,11 @@
 import { ACTIVITIES } from "../../data/content";
+import { useNavigate } from "react-router-dom";
 import { Reveal, SectionHeading } from "./Reveal";
-import { Info } from "lucide-react";
+import { Info, ArrowRight } from "lucide-react";
 
-export const Activities = () => (
+export const Activities = () => {
+  const navigate = useNavigate();
+  return (
   <section
     id="activities"
     data-testid="activities-section"
@@ -20,9 +23,10 @@ export const Activities = () => (
       <div className="mt-14 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
         {ACTIVITIES.map((act, i) => (
           <Reveal key={act.title} delay={(i % 3) * 0.06}>
-            <div
+            <button
               data-testid={`activity-card-${i}`}
-              className="group h-full bg-white border border-white p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+              onClick={() => navigate(`/activities/${act.slug}`)}
+              className="group w-full text-left h-full bg-white border border-white p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
             >
               <div className="flex items-center justify-between">
                 <div className="w-11 h-11 flex items-center justify-center bg-raf-sky text-raf-blue group-hover:bg-raf-blue group-hover:text-white transition-colors">
@@ -38,7 +42,10 @@ export const Activities = () => (
               <p className="mt-2 text-sm text-raf-slate leading-relaxed">
                 {act.text}
               </p>
-            </div>
+              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-raf-red">
+                Learn more <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+              </span>
+            </button>
           </Reveal>
         ))}
       </div>
@@ -54,4 +61,5 @@ export const Activities = () => (
       </Reveal>
     </div>
   </section>
-);
+  );
+};

@@ -50,19 +50,177 @@ export const ABOUT_CARDS = [
 ];
 
 export const ACTIVITIES = [
-  { title: "Flying", icon: Plane, text: "Cadets may have opportunities to experience flying through RAF Air Cadets activities, subject to availability and eligibility." },
-  { title: "Gliding", icon: Wind, text: "Cadets can work towards gliding experiences delivered in line with RAFAC procedures and programme planning." },
-  { title: "Adventure Training", icon: Mountain, text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent." },
-  { title: "Duke of Edinburgh\u2019s Award", icon: Award, text: "Cadets can work towards Bronze, Silver and Gold DofE awards through the squadron programme." },
-  { title: "First Aid", icon: HeartPulse, text: "Cadets may work towards recognised first aid training and qualifications, subject to eligibility." },
-  { title: "Leadership", icon: Compass, text: "Practical leadership tasks, teamwork challenges and NCO development opportunities." },
-  { title: "Fieldcraft", icon: Tent, text: "Learn navigation, teamwork and outdoor skills through structured fieldcraft training." },
-  { title: "Sport", icon: Trophy, text: "Take part in squadron, wing and corps sport, from athletics to team games." },
-  { title: "Camps", icon: TentTree, text: "Cadets may attend camps and visits, including activities at RAF stations where available." },
-  { title: "Drill and Uniform", icon: Shield, text: "Develop discipline, pride and bearing through drill and uniform standards." },
-  { title: "Aviation Studies", icon: BookOpen, text: "Build knowledge of aircraft, navigation, air power and the principles of flight." },
-  { title: "Community Events", icon: HeartHandshake, text: "Represent the squadron at parades, fundraising and local community events." },
+  {
+    slug: "flying", title: "Flying", icon: Plane,
+    text: "Cadets may have opportunities to experience flying through RAF Air Cadets activities, subject to availability and eligibility.",
+    long: [
+      "Flying is one of the most exciting parts of being an Air Cadet. Through RAF Air Cadets activities, cadets may have opportunities to take to the air and experience powered flight first-hand, building a real understanding of aviation.",
+      "Flying opportunities are arranged through RAFAC and depend on availability, eligibility, weather and procedures, so they are not guaranteed for every cadet at every stage \u2014 but they are a genuine goal to aim for.",
+    ],
+    highlights: [
+      "Experience powered flight where opportunities are available",
+      "Learn the basic principles of flight and airmanship",
+      "Understand the role of aircraft and air power",
+      "Work towards aviation-themed badges and progression",
+    ],
+  },
+  {
+    slug: "gliding", title: "Gliding", icon: Wind,
+    text: "Cadets can work towards gliding experiences delivered in line with RAFAC procedures and programme planning.",
+    long: [
+      "Gliding gives cadets the chance to experience flight in a glider and learn how aircraft use the air to stay aloft.",
+      "Like flying, gliding is delivered through RAFAC and is subject to availability, eligibility, weather and safety procedures.",
+    ],
+    highlights: [
+      "Experience gliding where opportunities are available",
+      "Learn how gliders generate lift and stay airborne",
+      "Build confidence and situational awareness",
+      "Progress through aviation training where eligible",
+    ],
+  },
+  {
+    slug: "adventure-training", title: "Adventure Training", icon: Mountain,
+    text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent.",
+    long: [
+      "Adventure training takes cadets into the outdoors to take on new challenges \u2014 from hill walking and climbing to paddle sports and more.",
+      "Activities are weather-dependent and delivered by qualified staff in line with RAFAC safety procedures, with appropriate supervision.",
+    ],
+    highlights: [
+      "Try activities such as hill walking, climbing and kayaking",
+      "Develop teamwork, resilience and self-confidence",
+      "Learn to plan, prepare and stay safe outdoors",
+      "Take part where activities are available and supervised",
+    ],
+  },
+  {
+    slug: "dofe", title: "Duke of Edinburgh\u2019s Award", icon: Award,
+    text: "Cadets can work towards Bronze, Silver and Gold DofE awards through the squadron programme.",
+    long: [
+      "The Duke of Edinburgh\u2019s Award is a respected programme recognised by employers, colleges and universities. Cadets can work towards Bronze, Silver and Gold levels.",
+      "Each level involves volunteering, physical activity, developing a skill and an expedition, delivered alongside the wider cadet programme.",
+    ],
+    highlights: [
+      "Work towards Bronze, Silver and Gold awards",
+      "Develop a new skill and improve physical fitness",
+      "Take part in expeditions and volunteering",
+      "Gain an award recognised on CVs and applications",
+    ],
+  },
+  {
+    slug: "first-aid", title: "First Aid", icon: HeartPulse,
+    text: "Cadets may work towards recognised first aid training and qualifications, subject to eligibility.",
+    long: [
+      "First aid is a practical, life-relevant skill. Cadets may work towards recognised first aid training, learning how to help in an emergency.",
+      "Training is delivered in line with RAFAC and is subject to eligibility and availability.",
+    ],
+    highlights: [
+      "Learn essential first aid and emergency response",
+      "Build confidence to act calmly under pressure",
+      "Work towards recognised first aid qualifications",
+      "Develop responsibility and care for others",
+    ],
+  },
+  {
+    slug: "leadership", title: "Leadership", icon: Compass,
+    text: "Practical leadership tasks, teamwork challenges and NCO development opportunities.",
+    long: [
+      "Leadership runs through everything cadets do. Through practical tasks and team challenges, cadets learn to plan, communicate, delegate and lead.",
+      "As they progress, cadets may take on responsibility as non-commissioned officers (NCOs), developing skills valued well beyond the squadron.",
+    ],
+    highlights: [
+      "Take part in practical leadership tasks and challenges",
+      "Develop communication and decision-making skills",
+      "Work towards NCO responsibility as you progress",
+      "Build experience to talk about in interviews",
+    ],
+  },
+  {
+    slug: "fieldcraft", title: "Fieldcraft", icon: Tent,
+    text: "Learn navigation, teamwork and outdoor skills through structured fieldcraft training.",
+    long: [
+      "Fieldcraft teaches cadets how to work effectively as a team in the outdoors, covering navigation, communication and practical field skills.",
+      "Sessions are structured and supervised, building confidence and teamwork step by step.",
+    ],
+    highlights: [
+      "Learn navigation and map-reading",
+      "Develop teamwork and communication in the field",
+      "Build practical outdoor skills",
+      "Take part in structured, supervised exercises",
+    ],
+  },
+  {
+    slug: "sport", title: "Sport", icon: Trophy,
+    text: "Take part in squadron, wing and corps sport, from athletics to team games.",
+    long: [
+      "Sport is a big part of cadet life, with opportunities to take part at squadron, wing and corps level across a range of activities.",
+      "From athletics to team games, sport builds fitness, teamwork and a healthy sense of competition.",
+    ],
+    highlights: [
+      "Take part in a range of individual and team sports",
+      "Represent the squadron at wing and corps level",
+      "Improve fitness, teamwork and resilience",
+      "Try new sports in a supportive environment",
+    ],
+  },
+  {
+    slug: "camps", title: "Camps", icon: TentTree,
+    text: "Cadets may attend camps and visits, including activities at RAF stations where available.",
+    long: [
+      "Camps and visits are some of the most memorable experiences cadets can have, including activities and stays at RAF stations where available.",
+      "Places are subject to availability, eligibility and RAFAC procedures.",
+    ],
+    highlights: [
+      "Attend camps and visits where available",
+      "Experience life and activities at RAF stations",
+      "Make friends and memories beyond the squadron",
+      "Take on new challenges away from home",
+    ],
+  },
+  {
+    slug: "drill-and-uniform", title: "Drill and Uniform", icon: Shield,
+    text: "Develop discipline, pride and bearing through drill and uniform standards.",
+    long: [
+      "Drill and uniform are part of the heritage and discipline of the Air Cadets. Cadets learn to take pride in their appearance and bearing.",
+      "Drill develops coordination, attention to detail and teamwork, and features at parades and ceremonial events.",
+    ],
+    highlights: [
+      "Learn drill and develop precision and discipline",
+      "Take pride in uniform standards and bearing",
+      "Represent the squadron at parades and events",
+      "Build self-discipline and attention to detail",
+    ],
+  },
+  {
+    slug: "aviation-studies", title: "Aviation Studies", icon: BookOpen,
+    text: "Build knowledge of aircraft, navigation, air power and the principles of flight.",
+    long: [
+      "Aviation studies build cadets\u2019 knowledge of aircraft, navigation, air power and the principles of flight.",
+      "This underpins many other activities and supports progression through the cadet training syllabus.",
+    ],
+    highlights: [
+      "Learn the principles of flight and airmanship",
+      "Build knowledge of aircraft and air power",
+      "Develop navigation and aviation theory",
+      "Progress through the cadet training syllabus",
+    ],
+  },
+  {
+    slug: "community-events", title: "Community Events", icon: HeartHandshake,
+    text: "Represent the squadron at parades, fundraising and local community events.",
+    long: [
+      "Cadets represent 1471 Horwich Squadron at parades, fundraising and local community events, giving back to the area and developing pride.",
+      "Taking part builds confidence, teamwork and a strong sense of belonging.",
+    ],
+    highlights: [
+      "Represent the squadron at local events",
+      "Support parades and ceremonial occasions",
+      "Take part in fundraising and community work",
+      "Develop pride, confidence and belonging",
+    ],
+  },
 ];
+
+export const getActivity = (slug) => ACTIVITIES.find((a) => a.slug === slug);
 
 export const CADET_BULLETS = [
   "Learn about aviation and aircraft.",

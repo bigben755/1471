@@ -5,6 +5,7 @@ import { Layout } from "@/components/site/Layout";
 import Home from "@/pages/site/Home";
 import AboutPage from "@/pages/site/AboutPage";
 import ActivitiesPage from "@/pages/site/ActivitiesPage";
+import ActivityDetailPage from "@/pages/site/ActivityDetailPage";
 import CadetsPage from "@/pages/site/CadetsPage";
 import ParentsPage from "@/pages/site/ParentsPage";
 import VolunteerPage from "@/pages/site/VolunteerPage";
@@ -21,6 +22,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/activities" element={<ActivitiesPage />} />
+            <Route path="/activities/:slug" element={<ActivityDetailPage />} />
             <Route path="/cadets" element={<CadetsPage />} />
             <Route path="/parents" element={<ParentsPage />} />
             <Route path="/volunteer" element={<VolunteerPage />} />
