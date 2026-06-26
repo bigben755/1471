@@ -52,6 +52,7 @@ export const ABOUT_CARDS = [
 export const ACTIVITIES = [
   {
     slug: "flying", title: "Flying", icon: Plane,
+    image: "https://lh3.googleusercontent.com/d/10s75_jUArt6yuHC-vPMl0omZmRLKtYiq=w1280",
     text: "Cadets may have opportunities to experience flying through RAF Air Cadets activities, subject to availability and eligibility.",
     long: [
       "Flying is one of the most exciting parts of being an Air Cadet. Through RAF Air Cadets activities, cadets may have opportunities to take to the air and experience powered flight first-hand, building a real understanding of aviation.",
@@ -150,6 +151,7 @@ export const ACTIVITIES = [
   },
   {
     slug: "sport", title: "Sport", icon: Trophy,
+    image: "https://lh3.googleusercontent.com/d/1B3jIMNg_k97oWC8xTDF_28A6VaPkf1Jr=w1280",
     text: "Take part in squadron, wing and corps sport, from athletics to team games.",
     long: [
       "Sport is a big part of cadet life, with opportunities to take part at squadron, wing and corps level across a range of activities.",
@@ -192,6 +194,7 @@ export const ACTIVITIES = [
   },
   {
     slug: "aviation-studies", title: "Aviation Studies", icon: BookOpen,
+    image: "https://lh3.googleusercontent.com/d/1N8X4K_aaDw_Y1CJxg0OckPJxJDrCqpzl=w1280",
     text: "Build knowledge of aircraft, navigation, air power and the principles of flight.",
     long: [
       "Aviation studies build cadets\u2019 knowledge of aircraft, navigation, air power and the principles of flight.",
@@ -206,6 +209,7 @@ export const ACTIVITIES = [
   },
   {
     slug: "community-events", title: "Community Events", icon: HeartHandshake,
+    image: "https://lh3.googleusercontent.com/d/1rgPeFyDDVWtRGAcElDjGNouIW6vSX_T8=w1280",
     text: "Represent the squadron at parades, fundraising and local community events.",
     long: [
       "Cadets represent 1471 Horwich Squadron at parades, fundraising and local community events, giving back to the area and developing pride.",
