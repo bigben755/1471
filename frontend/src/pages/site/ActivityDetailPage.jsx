@@ -1,19 +1,22 @@
+import { useState } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
 import { ACTIVITIES, getActivity } from "../../data/content";
 import { Seo } from "../../components/site/Seo";
 import { Reveal } from "../../components/site/Reveal";
 import { Roundel } from "../../components/site/Motifs";
-import { Check, ArrowRight, ArrowLeft, Info } from "lucide-react";
+import { Check, ArrowRight, ArrowLeft, Info, X } from "lucide-react";
 
 export default function ActivityDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const activity = getActivity(slug);
+  const [lightbox, setLightbox] = useState(null);
 
   if (!activity) return <Navigate to="/activities" replace />;
 
   const related = ACTIVITIES.filter((a) => a.slug !== slug).slice(0, 3);
   const Icon = activity.icon;
+  const gallery = activity.gallery || [];
 
   return (
     <div data-testid="activity-detail-page">
@@ -24,10 +27,16 @@ export default function ActivityDetailPage() {
 
       {/* Header band */}
       <section className="relative bg-raf-navy text-white overflow-hidden">
+        {activity.image && (
+          <div className="absolute inset-0">
+            <img src={activity.image} alt={activity.title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-raf-navy via-raf-navy/85 to-raf-navy/55" />
+          </div>
+        )}
         <div className="absolute inset-0 route-lines opacity-30" />
         <Roundel className="absolute -right-20 -bottom-24 w-72 h-72 opacity-[0.07]" />
         <div className="absolute top-0 right-0 h-full w-[5px] bg-raf-red" />
-        <div className="relative max-w-7xl mx-auto px-5 md:px-10 py-16 md:py-20">
+        <div className="relative max-w-7xl mx-auto px-5 md:px-10 py-16 md:py-24">
           <button
             data-testid="back-to-activities"
             onClick={() => navigate("/activities")}
@@ -90,6 +99,59 @@ export default function ActivityDetailPage() {
           </Reveal>
         </div>
       </section>
+
+      {/* Gallery */}
+      {gallery.length > 0 && (
+        <section className="py-14 md:py-20 bg-raf-sky/40 border-t border-raf-sky" data-testid="activity-gallery">
+          <div className="max-w-7xl mx-auto px-5 md:px-10">
+            <div className="flex items-center gap-3 mb-8">
+              <span className="h-[3px] w-8 bg-raf-red" />
+              <h2 className="font-display text-2xl font-bold text-raf-navy">Squadron photos</h2>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+              {gallery.map((g, i) => (
+                <button
+                  key={g.src}
+                  data-testid={`gallery-item-${i}`}
+                  onClick={() => setLightbox(g)}
+                  className="group relative aspect-square overflow-hidden bg-raf-navy/10"
+                >
+                  <img
+                    src={g.src}
+                    alt={g.caption}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-raf-navy/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                    <span className="text-white text-xs font-medium leading-snug">{g.caption}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          data-testid="gallery-lightbox"
+          onClick={() => setLightbox(null)}
+          className="fixed inset-0 z-[120] bg-raf-navy/95 flex items-center justify-center p-4 md:p-10"
+        >
+          <button
+            data-testid="lightbox-close"
+            onClick={() => setLightbox(null)}
+            className="absolute top-5 right-5 w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-raf-red text-white transition-colors"
+          >
+            <X size={22} />
+          </button>
+          <figure className="max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
+            <img src={lightbox.src} alt={lightbox.caption} className="max-h-[80vh] w-auto mx-auto object-contain" />
+            <figcaption className="mt-4 text-center text-white/80 text-sm">{lightbox.caption}</figcaption>
+          </figure>
+        </div>
+      )}
 
       {/* Related */}
       <section className="py-16 md:py-20 bg-raf-sky">

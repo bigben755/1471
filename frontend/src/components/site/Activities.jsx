@@ -26,25 +26,38 @@ export const Activities = () => {
             <button
               data-testid={`activity-card-${i}`}
               onClick={() => navigate(`/activities/${act.slug}`)}
-              className="group w-full text-left h-full bg-white border border-white p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+              className="group w-full text-left h-full bg-white border border-white hover:shadow-lg hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col"
             >
-              <div className="flex items-center justify-between">
-                <div className="w-11 h-11 flex items-center justify-center bg-raf-sky text-raf-blue group-hover:bg-raf-blue group-hover:text-white transition-colors">
-                  <act.icon size={20} />
+              {act.image && (
+                <div className="relative aspect-[16/10] overflow-hidden">
+                  <img
+                    src={act.image}
+                    alt={act.title}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-raf-navy/40 to-transparent" />
                 </div>
-                <span className="font-display text-xs font-bold text-raf-sky group-hover:text-raf-red transition-colors">
-                  {String(i + 1).padStart(2, "0")}
+              )}
+              <div className="p-6 flex flex-col flex-1">
+                <div className="flex items-center justify-between">
+                  <div className="w-11 h-11 flex items-center justify-center bg-raf-sky text-raf-blue group-hover:bg-raf-blue group-hover:text-white transition-colors">
+                    <act.icon size={20} />
+                  </div>
+                  <span className="font-display text-xs font-bold text-raf-sky group-hover:text-raf-red transition-colors">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                </div>
+                <h3 className="mt-4 font-display text-lg font-bold text-raf-navy">
+                  {act.title}
+                </h3>
+                <p className="mt-2 text-sm text-raf-slate leading-relaxed">
+                  {act.text}
+                </p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-raf-red">
+                  Learn more <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
                 </span>
               </div>
-              <h3 className="mt-4 font-display text-lg font-bold text-raf-navy">
-                {act.title}
-              </h3>
-              <p className="mt-2 text-sm text-raf-slate leading-relaxed">
-                {act.text}
-              </p>
-              <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-raf-red">
-                Learn more <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
-              </span>
             </button>
           </Reveal>
         ))}

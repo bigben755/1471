@@ -1,4 +1,4 @@
-import { ABOUT_CARDS } from "../../data/content";
+import { ABOUT_CARDS, ABOUT_IMG } from "../../data/content";
 import { Reveal, SectionHeading } from "./Reveal";
 import { Roundel } from "./Motifs";
 
@@ -13,15 +13,28 @@ export const About = () => (
         />
       </Reveal>
 
-      <Reveal delay={0.1}>
-        <p className="mt-6 max-w-3xl text-base md:text-lg text-raf-slate leading-relaxed">
-          Cadets can take part in a wide range of activities, from aviation
-          studies and leadership tasks to camps, sport, first aid, DofE,
-          fieldcraft, drill and community events. The squadron provides a
-          structured, supportive environment where cadets can grow at their own
-          pace while being encouraged to take on new challenges.
-        </p>
-      </Reveal>
+      <div className="mt-8 grid lg:grid-cols-2 gap-10 items-center">
+        <Reveal delay={0.1}>
+          <p className="max-w-3xl text-base md:text-lg text-raf-slate leading-relaxed">
+            Cadets can take part in a wide range of activities, from aviation
+            studies and leadership tasks to camps, sport, first aid, DofE,
+            fieldcraft, drill and community events. The squadron provides a
+            structured, supportive environment where cadets can grow at their own
+            pace while being encouraged to take on new challenges.
+          </p>
+        </Reveal>
+        <Reveal delay={0.15}>
+          <div className="relative">
+            <div className="absolute -inset-2 border border-raf-sky -z-10" />
+            <img
+              src={ABOUT_IMG}
+              alt="Cadets of 1471 Horwich Squadron on parade"
+              className="w-full aspect-[4/3] object-cover"
+            />
+            <div className="absolute bottom-0 left-0 h-1.5 w-24 bg-raf-red" />
+          </div>
+        </Reveal>
+      </div>
 
       <div className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-6">
         {ABOUT_CARDS.map((card, i) => (

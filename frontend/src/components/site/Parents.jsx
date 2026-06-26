@@ -1,4 +1,4 @@
-import { PARENT_CARDS } from "../../data/content";
+import { PARENT_CARDS, PARENTS_IMG } from "../../data/content";
 import { useNavigate } from "react-router-dom";
 import { Reveal, SectionHeading } from "./Reveal";
 import { ArrowRight } from "lucide-react";
@@ -8,13 +8,26 @@ export const Parents = () => {
   return (
   <section id="parents" data-testid="parents-section" className="py-20 md:py-28 bg-white">
     <div className="max-w-7xl mx-auto px-5 md:px-10">
-      <Reveal>
-        <SectionHeading
-          eyebrow="For parents and carers"
-          title="Information for parents and carers"
-          intro="Parents and carers naturally want to know that activities are organised, supervised and worthwhile. RAF Air Cadets provides a structured youth development environment with trained adult volunteers, clear policies and a programme designed to help young people grow in confidence, responsibility and resilience."
-        />
-      </Reveal>
+      <div className="grid lg:grid-cols-2 gap-10 items-center">
+        <Reveal>
+          <SectionHeading
+            eyebrow="For parents and carers"
+            title="Information for parents and carers"
+            intro="Parents and carers naturally want to know that activities are organised, supervised and worthwhile. RAF Air Cadets provides a structured youth development environment with trained adult volunteers, clear policies and a programme designed to help young people grow in confidence, responsibility and resilience."
+          />
+        </Reveal>
+        <Reveal delay={0.12}>
+          <div className="relative">
+            <div className="absolute -inset-2 border border-raf-sky -z-10" />
+            <img
+              src={PARENTS_IMG}
+              alt="Cadets recognised at a 1471 Squadron presentation evening"
+              className="w-full aspect-[4/3] object-cover"
+            />
+            <div className="absolute bottom-0 left-0 h-1.5 w-24 bg-raf-red" />
+          </div>
+        </Reveal>
+      </div>
 
       <div className="mt-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {PARENT_CARDS.map((card, i) => (

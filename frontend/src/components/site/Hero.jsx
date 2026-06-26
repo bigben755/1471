@@ -16,7 +16,7 @@ export const Hero = () => {
       <div className="absolute inset-0">
         <img
           src={SKY_HERO}
-          alt="Glider soaring under open sky"
+          alt="1471 Horwich Squadron cadets in the sky"
           className="w-full h-full object-cover object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-br from-raf-navy/95 via-raf-blue/85 to-raf-navy/80" />

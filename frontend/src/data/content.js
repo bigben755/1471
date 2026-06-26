@@ -8,10 +8,13 @@ import {
 export const CREST_URL =
   "https://customer-assets.emergentagent.com/job_283d297f-7217-4e9a-b0b5-b0baa4b4d8bf/artifacts/nmvg3tzu_1471%20crest%20transparent.png";
 
-export const SKY_HERO =
-  "https://images.unsplash.com/photo-1561292668-2c02d228b17f?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920";
-export const CLOUDS_WIDE =
-  "https://images.unsplash.com/photo-1499346030926-9a72daac6c63?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920";
+// Squadron photographs (served locally from /public/squadron)
+const IMG = (f) => `/squadron/${f}`;
+
+export const SKY_HERO = IMG("flying-up-in-the-sky.jpg");
+export const CLOUDS_WIDE = IMG("flying-cadets-on-the-flightline.jpg");
+export const ABOUT_IMG = IMG("parade-evening-awards-night.jpg");
+export const PARENTS_IMG = IMG("presentation-evening-1.jpg");
 
 export const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -52,7 +55,21 @@ export const ABOUT_CARDS = [
 export const ACTIVITIES = [
   {
     slug: "flying", title: "Flying", icon: Plane,
-    image: "https://lh3.googleusercontent.com/d/10s75_jUArt6yuHC-vPMl0omZmRLKtYiq=w1280",
+    image: IMG("flying-cadets-ready-for-flight.jpg"),
+    gallery: [
+      { src: IMG("flying-cadet-being-fitted-with-kit.jpg"), caption: "Being fitted with flying kit" },
+      { src: IMG("flying-getting-in-the-aircraft.jpg"), caption: "Getting into the aircraft" },
+      { src: IMG("flying-cadet-in-cockpit.jpg"), caption: "In the cockpit" },
+      { src: IMG("flying-cadet-in-cockpit-2.jpg"), caption: "Ready at the controls" },
+      { src: IMG("flying-happy-in-the-cockpit.jpg"), caption: "All smiles before take-off" },
+      { src: IMG("flying-ready-for-take-off.jpg"), caption: "Ready for take-off" },
+      { src: IMG("flying-view-from-the-cockpit.jpg"), caption: "The view from the cockpit" },
+      { src: IMG("flying-up-in-the-sky.jpg"), caption: "Up in the sky" },
+      { src: IMG("flying-cadets-on-the-flightline.jpg"), caption: "Cadets on the flightline" },
+      { src: IMG("flying-cadets-walk-to-the-flightline.jpg"), caption: "Walking out to the flightline" },
+      { src: IMG("flying-award-1.jpg"), caption: "Flying award" },
+      { src: IMG("flying-award-2.jpg"), caption: "Celebrating a flying achievement" },
+    ],
     text: "Cadets may have opportunities to experience flying through RAF Air Cadets activities, subject to availability and eligibility.",
     long: [
       "Flying is one of the most exciting parts of being an Air Cadet. Through RAF Air Cadets activities, cadets may have opportunities to take to the air and experience powered flight first-hand, building a real understanding of aviation.",
@@ -67,6 +84,11 @@ export const ACTIVITIES = [
   },
   {
     slug: "gliding", title: "Gliding", icon: Wind,
+    image: IMG("gliding-cadet-in-glider.jpg"),
+    gallery: [
+      { src: IMG("gliding-cadet-in-glider.jpg"), caption: "A cadet in the glider" },
+      { src: IMG("gliding-cadets-helping.jpg"), caption: "Cadets helping on the airfield" },
+    ],
     text: "Cadets can work towards gliding experiences delivered in line with RAFAC procedures and programme planning.",
     long: [
       "Gliding gives cadets the chance to experience flight in a glider and learn how aircraft use the air to stay aloft.",
@@ -81,6 +103,11 @@ export const ACTIVITIES = [
   },
   {
     slug: "adventure-training", title: "Adventure Training", icon: Mountain,
+    image: IMG("overseas-1-group-photo.jpg"),
+    gallery: [
+      { src: IMG("overseas-1.jpg"), caption: "Adventure overseas" },
+      { src: IMG("overseas-1-group-photo.jpg"), caption: "The team on an overseas trip" },
+    ],
     text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent.",
     long: [
       "Adventure training takes cadets into the outdoors to take on new challenges \u2014 from hill walking and climbing to paddle sports and more.",
@@ -123,6 +150,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "leadership", title: "Leadership", icon: Compass,
+    image: IMG("presentation-evening-2.jpg"),
+    gallery: [
+      { src: IMG("presentation-evening-1.jpg"), caption: "Presentation evening" },
+      { src: IMG("presentation-evening-2.jpg"), caption: "Recognising achievement" },
+      { src: IMG("presentation-evening-3.jpg"), caption: "Awards and progression" },
+      { src: IMG("parade-evening-awards-night.jpg"), caption: "Awards night on parade" },
+    ],
     text: "Practical leadership tasks, teamwork challenges and NCO development opportunities.",
     long: [
       "Leadership runs through everything cadets do. Through practical tasks and team challenges, cadets learn to plan, communicate, delegate and lead.",
@@ -151,7 +185,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "sport", title: "Sport", icon: Trophy,
-    image: "https://lh3.googleusercontent.com/d/1B3jIMNg_k97oWC8xTDF_28A6VaPkf1Jr=w1280",
+    image: IMG("fun-go-karting-team-photo.jpg"),
+    gallery: [
+      { src: IMG("fun-go-karting-brief.jpg"), caption: "The safety brief" },
+      { src: IMG("fun-go-karting-ready-to-go.jpg"), caption: "Ready to go" },
+      { src: IMG("fun-go-karting-in-the-pits.jpg"), caption: "In the pits" },
+      { src: IMG("fun-go-karting-team-photo.jpg"), caption: "The go-karting team" },
+    ],
     text: "Take part in squadron, wing and corps sport, from athletics to team games.",
     long: [
       "Sport is a big part of cadet life, with opportunities to take part at squadron, wing and corps level across a range of activities.",
@@ -166,6 +206,15 @@ export const ACTIVITIES = [
   },
   {
     slug: "camps", title: "Camps", icon: TentTree,
+    image: IMG("raf-station-visit-bbmf-group-photo.jpg"),
+    gallery: [
+      { src: IMG("raf-station-visit-bbmf-group-photo.jpg"), caption: "Group photo at a station visit" },
+      { src: IMG("raf-station-visit-1-cadet-in-a-typhoon-raf-coningsby.jpg"), caption: "A cadet in a Typhoon, RAF Coningsby" },
+      { src: IMG("raf-station-visit-1-raf-typhoon.jpg"), caption: "Up close with an RAF Typhoon" },
+      { src: IMG("raf-station-visit-1-tour-round-a-typhoon-by-raf-pilot.jpg"), caption: "A tour of the Typhoon with an RAF pilot" },
+      { src: IMG("raf-station-visit-2-bbmf-spitfire.jpg"), caption: "BBMF Spitfire" },
+      { src: IMG("raf-station-visit-2-bbmf-lancaster.jpg"), caption: "BBMF Lancaster" },
+    ],
     text: "Cadets may attend camps and visits, including activities at RAF stations where available.",
     long: [
       "Camps and visits are some of the most memorable experiences cadets can have, including activities and stays at RAF stations where available.",
@@ -180,6 +229,14 @@ export const ACTIVITIES = [
   },
   {
     slug: "drill-and-uniform", title: "Drill and Uniform", icon: Shield,
+    image: IMG("parade-1-confirmation-of-the-king-1.jpg"),
+    gallery: [
+      { src: IMG("parade-1-confirmation-of-the-king-1.jpg"), caption: "On parade" },
+      { src: IMG("parade-1-confirmation-of-the-king-2.jpg"), caption: "Ceremonial bearing" },
+      { src: IMG("rememberance-sunday-parade-1.jpg"), caption: "Remembrance Sunday parade" },
+      { src: IMG("rememberance-sunday-parade-2.jpg"), caption: "Marching with pride" },
+      { src: IMG("rememberance-parade-1.jpg"), caption: "Remembrance parade" },
+    ],
     text: "Develop discipline, pride and bearing through drill and uniform standards.",
     long: [
       "Drill and uniform are part of the heritage and discipline of the Air Cadets. Cadets learn to take pride in their appearance and bearing.",
@@ -194,7 +251,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "aviation-studies", title: "Aviation Studies", icon: BookOpen,
-    image: "https://lh3.googleusercontent.com/d/1N8X4K_aaDw_Y1CJxg0OckPJxJDrCqpzl=w1280",
+    image: IMG("flight-sim-1.jpg"),
+    gallery: [
+      { src: IMG("flight-sim-1.jpg"), caption: "On the flight simulator" },
+      { src: IMG("flight-sim-2.jpg"), caption: "Learning the controls" },
+      { src: IMG("flight-sim-3.jpg"), caption: "Putting theory into practice" },
+      { src: IMG("careers-day-at-mbda.jpg"), caption: "Careers day at MBDA" },
+    ],
     text: "Build knowledge of aircraft, navigation, air power and the principles of flight.",
     long: [
       "Aviation studies build cadets\u2019 knowledge of aircraft, navigation, air power and the principles of flight.",
@@ -209,7 +272,15 @@ export const ACTIVITIES = [
   },
   {
     slug: "community-events", title: "Community Events", icon: HeartHandshake,
-    image: "https://lh3.googleusercontent.com/d/1rgPeFyDDVWtRGAcElDjGNouIW6vSX_T8=w1280",
+    image: IMG("poppy-appeal-collecting.jpg"),
+    gallery: [
+      { src: IMG("poppy-appeal-collecting.jpg"), caption: "Collecting for the Poppy Appeal" },
+      { src: IMG("poppy-appeal-collecting-2.jpg"), caption: "Supporting the Poppy Appeal" },
+      { src: IMG("poppy-appeal-1.jpg"), caption: "Poppy Appeal" },
+      { src: IMG("rememberance-concert-bolton-1.jpg"), caption: "Remembrance concert, Bolton" },
+      { src: IMG("rememberance-concert-2.jpg"), caption: "Remembrance concert" },
+      { src: IMG("rememberance-concert-3.jpg"), caption: "Honouring those who served" },
+    ],
     text: "Represent the squadron at parades, fundraising and local community events.",
     long: [
       "Cadets represent 1471 Horwich Squadron at parades, fundraising and local community events, giving back to the area and developing pride.",

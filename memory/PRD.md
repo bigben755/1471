@@ -63,3 +63,11 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - P2: Word (.docx) training-programme import → calendar events.
 - P2: Real browser web-push; forgot-password email (Resend); split server.py into routers; 201 status codes; login rate-limiting; pin CORS for production.
 
+---
+
+# Squadron photo integration — 2026-06-20
+- Extracted 46 real squadron photos from the client's Google Drive folder (raw-HTML data-id parse; lazy-load grid limitation bypassed). Downloaded, EXIF-rotated, resized to max 1600px / q82 (173MB → 14.6MB) and self-hosted under `/app/frontend/public/squadron/` (production-safe, no Google hotlinking/403 risk).
+- Mapped photos to 9 of 12 activities (flying, gliding, adventure-training, leadership, sport, camps, drill-and-uniform, aviation-studies, community-events) — each with a hero image + caption gallery. dofe/first-aid/fieldcraft have no matching photos (icon-only, by design).
+- Activities listing cards now show photo thumbnails; ActivityDetailPage has photo hero + responsive gallery grid with click-to-open lightbox. Hero + Cadets section backgrounds and About/Parents feature images now use real squadron photos.
+- Verified: all images serve HTTP 200 image/jpeg over the public URL; pages render correctly (screenshots).
+
