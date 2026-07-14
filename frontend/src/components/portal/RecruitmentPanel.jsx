@@ -25,7 +25,7 @@ const countdown = (iso) => {
   const days = Math.ceil((new Date(iso) - new Date()) / 86400000);
   if (days <= 0) return "now";
   const m = Math.floor(days / 30), d = days % 30;
-  if (m >= 1) return `about ${m} month${m !== 1 ? "s" : ""}${d ? ` ${d}d` : ""}`;
+  if (m >= 1) return `about ${m} month${m !== 1 ? "s" : ""}${d ? `, ${d} day${d !== 1 ? "s" : ""}` : ""}`;
   return `${days} day${days !== 1 ? "s" : ""}`;
 };
 
@@ -57,8 +57,15 @@ export const RecruitmentPanel = () => {
     try {
       const { data: res } = await api.post(`/enquiries/${emailFor.enquiry.id}/recruit-email`,
         { kind: emailFor.bucket.kind, note });
-      toast.success(res.email_status === "sent" ? "Email sent." : "Email queued.",
-        { description: emailFor.bucket.kind === "joining" ? "Joining instructions sent." : `Countdown to ${fmtDate(res.eligible_date)}.` });
+      if (res.email_status === "error") {
+        toast.error("Could not send the email. Please try again.");
+        return;
+      }
+      const name = emailFor.enquiry.name;
+      toast.success(emailFor.bucket.kind === "joining"
+        ? `Joining instructions emailed to ${name}.`
+        : `Countdown email sent to ${name}.`,
+        { description: emailFor.bucket.kind === "countdown" ? `They can join from ${fmtDate(res.eligible_date)}.` : undefined });
       setEmailFor(null); load();
     } catch (err) { toast.error(err.response?.data?.detail || "Could not send email."); }
     finally { setBusy(false); }

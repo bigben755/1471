@@ -414,7 +414,7 @@ def countdown_text(target_iso: str) -> str:
     if months >= 1:
         out = f"about {months} month{'s' if months != 1 else ''}"
         if rem:
-            out += f" and {rem} day{'s' if rem != 1 else ''}"
+            out += f", {rem} day{'s' if rem != 1 else ''}"
         return out
     return f"{days} day{'s' if days != 1 else ''}"
 
@@ -450,7 +450,7 @@ def _countdown_html(name: str, target_iso: str, note: str = "") -> str:
 async def send_recruit_email(e: dict, kind: Optional[str], note: str) -> dict:
     first = (e.get("name", "there").strip().split(" ") or ["there"])[0]
     elig = compute_eligibility(e)
-    k = kind or ("joining" if elig == "now" else "countdown")
+    k = "joining" if elig == "now" else (kind if kind in ("joining", "countdown") else "countdown")
     if k == "joining":
         status = await send_email(e["email"], "Joining 1471 Horwich Squadron \u2014 here's how",
                                   _joining_instructions_html(first, note), reply_to=NOTIFY_EMAIL)
@@ -461,9 +461,11 @@ async def send_recruit_email(e: dict, kind: Optional[str], note: str) -> dict:
             return {"sent": False, "error": "no_date"}
         status = await send_email(e["email"], "Not long until you can join 1471 Horwich Squadron!",
                                   _countdown_html(first, target, note), reply_to=NOTIFY_EMAIL)
-    await db.enquiries.update_one({"id": e["id"]}, {"$set": {
-        "status": "actioned", "last_recruit_email": {"kind": k, "at": now_iso(), "status": status}}})
-    return {"sent": status in ("sent", "skipped"), "email_status": status, "kind": k, "eligible_date": target}
+    set_fields = {"last_recruit_email": {"kind": k, "at": now_iso(), "status": status}}
+    if status == "sent":
+        set_fields["status"] = "actioned"
+    await db.enquiries.update_one({"id": e["id"]}, {"$set": set_fields})
+    return {"sent": status == "sent", "email_status": status, "kind": k, "eligible_date": target}
 
 
 async def resolve_recipients(a: Audience) -> List[dict]:
@@ -627,7 +629,7 @@ async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require
     for e in rows:
         if compute_eligibility(e) == payload.eligibility:
             res = await send_recruit_email(e, None, payload.note)
-            if res.get("sent"):
+            if res.get("email_status") == "sent":
                 sent += 1
             else:
                 skipped += 1
