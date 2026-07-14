@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
@@ -7,8 +7,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "../ui/dialog";
 import {
-  Loader2, Mail, Phone, UserPlus, Clock, CheckCircle2, CalendarClock, Send, MailCheck,
+  Loader2, Mail, Phone, UserPlus, Clock, CheckCircle2, CalendarClock, Send, MailCheck, Paperclip, X,
 } from "lucide-react";
+
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 const BUCKETS = [
   { key: "now", label: "Can join now", icon: CheckCircle2, tone: "text-emerald-700", bar: "bg-emerald-600",
@@ -34,9 +36,12 @@ export const RecruitmentPanel = () => {
   const [loading, setLoading] = useState(true);
   const [prefill, setPrefill] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [emailFor, setEmailFor] = useState(null); // { enquiry, bucket }
+  const [emailFor, setEmailFor] = useState(null); // { enquiry?, bucket, bulk? }
   const [note, setNote] = useState("");
+  const [attachments, setAttachments] = useState([]);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
 
   const load = useCallback(async () => {
     try { const { data } = await api.get("/enquiries/tracker"); setData(data); }
@@ -50,36 +55,55 @@ export const RecruitmentPanel = () => {
     setFormOpen(true);
   };
 
-  const openEmail = (enquiry, bucket) => { setEmailFor({ enquiry, bucket }); setNote(""); };
+  const openEmail = (enquiry, bucket, bulk = false) => {
+    setEmailFor({ enquiry, bucket, bulk }); setNote(""); setAttachments([]);
+  };
+
+  const uploadFiles = async (files) => {
+    setUploading(true);
+    try {
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const { data } = await api.post("/attachments", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        setAttachments((a) => [...a, { id: data.id, filename: data.filename }]);
+      }
+    } catch (err) { toast.error(err.response?.data?.detail || "Upload failed."); }
+    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+  };
 
   const sendEmail = async () => {
     setBusy(true);
     try {
-      const { data: res } = await api.post(`/enquiries/${emailFor.enquiry.id}/recruit-email`,
-        { kind: emailFor.bucket.kind, note });
-      if (res.email_status === "error") {
-        toast.error("Could not send the email. Please try again.");
-        return;
+      const bucket = emailFor.bucket;
+      const ids = attachments.map((a) => a.id);
+      if (emailFor.bulk) {
+        const { data: res } = await api.post("/enquiries/recruit-email/bulk",
+          { eligibility: bucket.key, note, attachment_ids: ids, base_url: BASE_URL });
+        toast.success(`${res.sent} email(s) sent.`, { description: res.skipped ? `${res.skipped} skipped (missing details).` : undefined });
+      } else {
+        const { data: res } = await api.post(`/enquiries/${emailFor.enquiry.id}/recruit-email`,
+          { kind: bucket.kind, note, attachment_ids: ids, base_url: BASE_URL });
+        if (res.email_status === "error") { toast.error("Could not send the email. Please try again."); return; }
+        const name = emailFor.enquiry.name;
+        toast.success(bucket.kind === "joining"
+          ? `Joining instructions emailed to ${name}.`
+          : `Countdown email sent to ${name}.`,
+          { description: bucket.kind === "countdown" ? `They can join from ${fmtDate(res.eligible_date)}.` : undefined });
       }
-      const name = emailFor.enquiry.name;
-      toast.success(emailFor.bucket.kind === "joining"
-        ? `Joining instructions emailed to ${name}.`
-        : `Countdown email sent to ${name}.`,
-        { description: emailFor.bucket.kind === "countdown" ? `They can join from ${fmtDate(res.eligible_date)}.` : undefined });
       setEmailFor(null); load();
     } catch (err) { toast.error(err.response?.data?.detail || "Could not send email."); }
     finally { setBusy(false); }
   };
 
-  const sendBulk = async (bucket) => {
+  const handleBulk = (bucket) => {
     const list = data?.buckets?.[bucket.key] || [];
     if (list.length === 0) return;
-    if (!window.confirm(`Send ${bucket.kind === "joining" ? "joining instructions" : "a countdown email"} to all ${list.length} prospect(s) in "${bucket.label}"?`)) return;
-    try {
-      const { data: res } = await api.post("/enquiries/recruit-email/bulk", { eligibility: bucket.key, note: "" });
-      toast.success(`${res.sent} email(s) sent.`, { description: res.skipped ? `${res.skipped} skipped (missing details).` : undefined });
-      load();
-    } catch (err) { toast.error(err.response?.data?.detail || "Could not send emails."); }
+    if (bucket.kind === "joining") { openEmail(null, bucket, true); return; }
+    if (!window.confirm(`Send a countdown email to all ${list.length} prospect(s) in "${bucket.label}"?`)) return;
+    api.post("/enquiries/recruit-email/bulk", { eligibility: bucket.key, note: "", base_url: BASE_URL })
+      .then(({ data: res }) => { toast.success(`${res.sent} email(s) sent.`, { description: res.skipped ? `${res.skipped} skipped (missing details).` : undefined }); load(); })
+      .catch((err) => toast.error(err.response?.data?.detail || "Could not send emails."));
   };
 
   if (loading) return <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>;
@@ -102,7 +126,7 @@ export const RecruitmentPanel = () => {
               </div>
               {list.length > 0 && (
                 <div className="px-4 pt-3">
-                  <button data-testid={`bucket-email-all-${b.key}`} onClick={() => sendBulk(b)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-raf-navy text-white hover:bg-raf-blue transition-colors">
+                  <button data-testid={`bucket-email-all-${b.key}`} onClick={() => handleBulk(b)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-raf-navy text-white hover:bg-raf-blue transition-colors">
                     <MailCheck size={13} /> {b.bulkCta} ({list.length})
                   </button>
                 </div>
@@ -150,8 +174,12 @@ export const RecruitmentPanel = () => {
           </DialogHeader>
           {emailFor && (
             <div className="space-y-3 text-sm">
-              <p className="text-raf-slate">To <strong className="text-raf-navy">{emailFor.enquiry.name}</strong> ({emailFor.enquiry.email})</p>
-              {emailFor.bucket.kind === "countdown" && emailFor.enquiry.eligible_date && (
+              {emailFor.bulk ? (
+                <p className="text-raf-slate">This will email <strong className="text-raf-navy">all {data?.buckets?.[emailFor.bucket.key]?.length || 0} prospect(s)</strong> in &ldquo;{emailFor.bucket.label}&rdquo;.</p>
+              ) : (
+                <p className="text-raf-slate">To <strong className="text-raf-navy">{emailFor.enquiry.name}</strong> ({emailFor.enquiry.email})</p>
+              )}
+              {emailFor.bucket.kind === "countdown" && !emailFor.bulk && emailFor.enquiry.eligible_date && (
                 <div className="bg-raf-sky/50 border-l-4 border-raf-blue p-3 text-raf-slate">
                   Countdown to <strong>{fmtDate(emailFor.enquiry.eligible_date)}</strong> — {countdown(emailFor.enquiry.eligible_date)} to go.
                 </div>
@@ -160,7 +188,31 @@ export const RecruitmentPanel = () => {
                 <label className="block text-xs font-semibold text-raf-navy mb-1">Add a personal note (optional)</label>
                 <textarea data-testid="recruit-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. We look forward to meeting you on Thursday!" className="w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm" />
               </div>
-              <p className="text-xs text-raf-slate">The rest of the email (parade nights, venue and next steps) is added automatically.</p>
+
+              {emailFor.bucket.kind === "joining" && (
+                <div data-testid="attachment-section">
+                  <label className="block text-xs font-semibold text-raf-navy mb-1">Attachments (e.g. joining form, welcome pack)</label>
+                  <input ref={fileRef} type="file" multiple data-testid="attachment-input" className="hidden" onChange={(e) => uploadFiles(Array.from(e.target.files || []))} />
+                  <button type="button" data-testid="attachment-add" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-raf-sky text-raf-blue hover:border-raf-blue transition-colors disabled:opacity-60">
+                    {uploading ? <Loader2 className="animate-spin" size={13} /> : <Paperclip size={13} />} Add file
+                  </button>
+                  {attachments.length > 0 && (
+                    <ul className="mt-2 space-y-1" data-testid="attachment-list">
+                      {attachments.map((a) => (
+                        <li key={a.id} className="flex items-center gap-2 text-xs bg-raf-sky/40 px-2 py-1.5">
+                          <Paperclip size={12} className="text-raf-blue" />
+                          <span className="truncate text-raf-navy">{a.filename}</span>
+                          <button type="button" onClick={() => setAttachments((x) => x.filter((y) => y.id !== a.id))} className="ml-auto text-raf-red hover:text-raf-navy"><X size={13} /></button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-1 text-xs text-raf-slate">Files are sent as secure download links in the email. Max 15MB each.</p>
+                </div>
+              )}
+              {emailFor.bucket.kind !== "joining" && (
+                <p className="text-xs text-raf-slate">The rest of the email (the countdown and squadron details) is added automatically.</p>
+              )}
             </div>
           )}
           <DialogFooter>

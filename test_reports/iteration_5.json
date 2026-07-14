@@ -1,0 +1,52 @@
+{
+  "summary": "End-to-end verification of the NEW attachment upload + time-aware recruitment buckets. Wrote a new pytest file (test_attachments_and_buckets.py — 13 tests, all pass) covering the attachment CRUD endpoints (POST/GET list/GET public download/DELETE), joining email with attachment_ids+base_url, and crafted-DoB checks that under_12 prospects move between 'september' and 'future' according to the England school-year rule (server 'today' = 2026-07-14, upcoming September = 2026-09-01). Frontend flow exercised as admin from the /portal login: 3 buckets render (now/september/future with counts 1/2/0 on demo data), per-prospect JOINING dialog exposes attachment-section, file upload appears in attachment-list, send yields 'Joining instructions emailed to Jo Eight.' toast; bucket-email-all-now opens the dialog in BULK mode (\"This will email all 1 prospect(s)\") with attachment-section available and sends '1 email(s) sent.'; bucket-email-all-september uses direct confirm+send (no dialog) and shows '2 email(s) sent.'; countdown per-prospect dialog correctly OMITS attachment-section.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/attachments/{id}/download", "issue": "Reads the whole file into memory via stream.read() before returning a Response. Fine for the 15MB cap, but StreamingResponse over fs.open_download_stream would scale better and avoid 15MB memory spikes per parallel download."},
+      {"endpoint": "POST /api/attachments", "issue": "Reads the whole upload with await file.read() before enforcing 15MB — a client sending a 500MB body will still buffer it in memory before rejection. Consider content-length precheck or chunked read+cutoff."},
+      {"endpoint": "POST /api/enquiries/{id}/recruit-email", "issue": "base_url is trusted verbatim from the caller and embedded into the joining email HTML link (base_url + /api/attachments/<id>/download). Not a bug given staff-only access, but an attacker who obtains staff auth could point recipients at an attacker-controlled domain. Consider deriving base_url server-side from request.base_url or from an env var (SITE_BASE_URL) rather than accepting it in the request body."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Recruitment tracker card", "issues": ["Countdown line now consistently reads 'about 1 month, 19 days to go' (design nit from iteration_4 has been fixed)."]},
+      {"screen": "RecruitmentPanel bulk countdown", "issues": ["handleBulk() for september/future still uses window.confirm() — inconsistent with the shadcn dialog used everywhere else in the portal, and explicitly flagged in iteration_4. Still unresolved."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_attachments_and_buckets.py",
+    "/app/test_reports/pytest/pytest_iter5.xml",
+    "/app/test_reports/pytest/pytest_iter5_all.xml"
+  ],
+  "action_items": [
+    "OPTIONAL/SEC: derive base_url server-side (request.base_url or SITE_BASE_URL env) rather than trusting the client-provided base_url for the attachment download links.",
+    "PRE-EXISTING (not this iteration): backend/tests/test_backend.py::TestEnquiryAdmin::test_stats_with_auth references GET /api/enquiries/stats which no longer exists (returns 405 because it collides with PATCH /api/enquiries/{id}). Either restore /enquiries/stats or delete this stale test.",
+    "PRE-EXISTING (not this iteration): backend/tests/test_phase2.py::TestCadetEnquiryEligibility::test_enquiry_with_under_12_maps_to_future asserts under_12 -> 'future' always, but the NEW time-aware logic (this iteration) correctly moves close-to-Sept under_12 into 'september'. Update the test's DoB (e.g. use 2018-06-01) or split into two cases (near-Sept -> 'september' vs far-Sept -> 'future').",
+    "OPTIONAL polish: unify handleBulk for countdown buckets to use a shadcn AlertDialog instead of window.confirm() (carry-over from iteration_4)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 1204 lines — the 700-line ceiling has been repeatedly flagged (iterations 3, 4) and this iteration added ~140 lines of attachments + recruit-email plumbing on top. Split into routers (auth/users/events/notices/messages/enquiries/recruit/attachments/broadcast/newsletters) is overdue.",
+    "download_attachment() buffers the whole file into memory via stream.read(); switch to StreamingResponse(fs.open_download_stream(...)) to stream chunks and reduce memory footprint under concurrent downloads.",
+    "upload_attachment() calls await file.read() before size check, so oversized bodies still get fully buffered before the 413 is returned. Prefer request.headers['content-length'] guard OR read-in-chunks with early abort.",
+    "_fetch_attachments() returns rows without ordering — the email documents list order can vary across sends. Sort by attachments[].filename or by upload order to make emails deterministic.",
+    "Client-supplied base_url is trusted and embedded into outgoing emails. Low risk today (staff-only), but a safer default is request.base_url on the server, with the client only supplying it as an override for local dev.",
+    "compute_eligibility() uses date.today() (server local date). Kubernetes containers usually run UTC; document that the England school-year rule is computed against server-UTC 'today' and not the user's timezone — a UK-based 23:00 Aug 31 could theoretically fall in the wrong bucket depending on the cluster clock. Consider zoneinfo('Europe/London') for correctness.",
+    "send_recruit_email() writes status='actioned' unconditionally when email_status=='sent' — good. But the bulk endpoint reports 'sent'/'skipped' where 'skipped' means either no_date OR the underlying email backend returned 'skipped'/'failed'. Split these in the response so the UI can differentiate 'no DoB on record' from 'email backend transient failure'.",
+    "RecruitmentPanel.handleBulk() still uses window.confirm() for countdown buckets while the joining bucket uses a Dialog — UX inconsistency previously flagged in iteration_4 and still present."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_attachments_and_buckets.py (new — 13 tests, all pass)",
+    "/app/test_reports/pytest/pytest_iter5.xml (new junit output)",
+    "/app/test_reports/pytest/pytest_iter5_all.xml (full-suite junit; 78 pass, 2 pre-existing stale failures)"
+  ],
+  "success_rate": {"backend": "100% for iter5 (13/13); 97% overall (78/80, 2 stale)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "test_attachments_and_buckets.py creates and auto-deletes: (a) TEST_welcome_pack.txt attachment (module-scoped, deleted on teardown), (b) throwaway TEST_up.txt / TEST_delme.txt attachments (deleted inside the test), (c) 5 TEST_Bucket_* enquiries with crafted DoBs (2015-02-01, 2015-11-01, 2016-05-01, 2013-06-01, 2012-01-01) plus a short-lived TEST_Joining Attach enquiry — all deleted on teardown. Frontend Playwright run sent real emails via the Emergent proxy to demo prospects Jo Eight (jo@example.com), Sam Small (sam@example.com), Alex Young (alex@example.com) with two throwaway TEST_ui_pack_*.txt attachments left in db.attachments (main agent can prune if wanted; they're small text blobs).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New file: /app/backend/tests/test_attachments_and_buckets.py. Backend tests now spread across 5 files: test_backend.py (public+enquiries — 1 stale failure on /enquiries/stats 405), test_phase2.py (recruitment/broadcast/notifications — 1 stale failure on under_12 -> 'future' assertion, now correctly 'september' due to time-aware bucketing), test_portal.py, test_recruit_email.py, test_attachments_and_buckets.py. Run: REACT_APP_BACKEND_URL=https://raf-horwich.preview.emergentagent.com python -m pytest backend/tests/ -v (full run takes ~2m — set --timeout 300 or split by file). Live server 'today' during this iteration was 2026-07-14 UTC; upcoming September = 2026-09-01. New RecruitmentPanel data-testids: attachment-section, attachment-add, attachment-input, attachment-list. All previous data-testids from iterations 3 & 4 still work. window.confirm dialogs must still be auto-accepted for bulk countdown tests (page.on('dialog', ...) in Playwright).",
+  "rca of the issue": "No blocking issues. The two pre-existing pytest failures pre-date this iteration and are stale-test issues, not application bugs — see action_items #2 and #3."
+}

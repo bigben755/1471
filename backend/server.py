@@ -14,10 +14,12 @@ from typing import List, Optional
 import jwt
 import bcrypt
 import httpx
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from bson import ObjectId
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 try:
@@ -31,6 +33,7 @@ except Exception:  # pragma: no cover
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+fs = AsyncIOMotorGridFSBucket(db)
 
 JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
@@ -353,42 +356,23 @@ async def send_enquiry_email(e: Enquiry) -> None:
 # ---------------------------------------------------------------------------
 # Recruitment eligibility + broadcast helpers
 # ---------------------------------------------------------------------------
-def compute_eligibility(e: dict) -> Optional[str]:
-    """Map a cadet enquiry's age band into now | september | future."""
+def _eligible_date_obj(e: dict):
+    """Canonical date a prospective cadet becomes eligible (date obj), or None."""
     band = e.get("age_band")
+    if not band:
+        return None
+    try:
+        cd = datetime.fromisoformat(e.get("created_at", "")).date()
+    except Exception:
+        cd = date.today()
     if band in ("yr8", "13_plus"):
-        return "now"
-    if band == "under_12":
-        return "future"
+        return cd  # already eligible when they enquired
     if band == "yr7_starting_yr8":
-        try:
-            cd = datetime.fromisoformat(e.get("created_at", "")).date()
-        except Exception:
-            cd = date.today()
-        sept = date(cd.year, 9, 1)
-        if cd > sept:
-            sept = date(cd.year + 1, 9, 1)
-        return "now" if date.today() >= sept else "september"
-    return None
-
-
-def eligible_date(e: dict) -> Optional[str]:
-    """Best-estimate date a prospective cadet can join (ISO date)."""
-    elig = compute_eligibility(e)
-    if elig == "now":
-        return date.today().isoformat()
-    if elig == "september":
-        try:
-            cd = datetime.fromisoformat(e.get("created_at", "")).date()
-        except Exception:
-            cd = date.today()
-        sept = date(cd.year, 9, 1)
-        if cd > sept:
-            sept = date(cd.year + 1, 9, 1)
-        if sept < date.today():
-            sept = date(date.today().year, 9, 1)
-        return sept.isoformat()
-    if elig == "future":
+        s = date(cd.year, 9, 1)
+        if cd > s:
+            s = date(cd.year + 1, 9, 1)
+        return s
+    if band == "under_12":
         dob = e.get("dob")
         if not dob:
             return None
@@ -401,8 +385,29 @@ def eligible_date(e: dict) -> Optional[str]:
                 return None
         # England school-year rule: Year 8 starts the September of birth_year + (12 if born Sep-Dec else 11)
         yr = d.year + (12 if d.month >= 9 else 11)
-        return date(yr, 9, 1).isoformat()
+        return date(yr, 9, 1)
     return None
+
+
+def eligible_date(e: dict) -> Optional[str]:
+    ed = _eligible_date_obj(e)
+    return ed.isoformat() if ed else None
+
+
+def compute_eligibility(e: dict) -> Optional[str]:
+    """Time-aware bucket: prospects move now <- september <- future as time passes."""
+    if not e.get("age_band"):
+        return None
+    ed = _eligible_date_obj(e)
+    if ed is None:
+        return "future"  # cadet enquiry with no date of birth on record
+    today = date.today()
+    if ed <= today:
+        return "now"
+    ns = date(today.year, 9, 1)
+    if today > ns:
+        ns = date(today.year + 1, 9, 1)
+    return "september" if ed <= ns else "future"
 
 
 def countdown_text(target_iso: str) -> str:
@@ -419,14 +424,21 @@ def countdown_text(target_iso: str) -> str:
     return f"{days} day{'s' if days != 1 else ''}"
 
 
-def _joining_instructions_html(name: str, note: str = "") -> str:
+def _joining_instructions_html(name: str, note: str = "", attachments: Optional[list] = None, base_url: str = "") -> str:
     note_html = f'<p style="padding:12px;background:#EAF5F8;border-left:3px solid #002F5F;">{note}</p>' if note else ""
+    docs_html = ""
+    if attachments:
+        items = "".join(
+            f'<li style="margin:4px 0;"><a href="{base_url}/api/attachments/{a["id"]}/download" style="color:#002F5F;">{a["filename"]}</a></li>'
+            for a in attachments)
+        docs_html = f'<p><strong>Documents to download</strong></p><ul style="padding-left:20px;">{items}</ul>'
     inner = f"""
       <p>Hi {name},</p>
       <p>Great news &mdash; you&rsquo;re old enough to join 1471 Horwich Squadron RAF Air Cadets, and we&rsquo;d love to welcome you along.</p>
       {note_html}
       <p><strong>When we parade</strong><br/>Monday &amp; Thursday evenings, 19:00&ndash;21:30.</p>
       <p><strong>Where</strong><br/>1471 (Horwich) ATC Sqn HQ, St Joseph&rsquo;s Secondary School &amp; Sports College, Chorley New Road, Horwich, BL6 6HW.</p>
+      {docs_html}
       <p><strong>What to do next</strong><br/>Come along on a parade night with a parent or carer, in comfortable clothing. You don&rsquo;t need any experience or kit. Please reply to this email to let us know which evening you&rsquo;ll visit so we can look out for you.</p>
       <p>We look forward to meeting you!</p>
       <p>1471 Horwich Squadron staff team</p>"""
@@ -447,13 +459,15 @@ def _countdown_html(name: str, target_iso: str, note: str = "") -> str:
     return _email_shell("Not long to go until you can join!", inner)
 
 
-async def send_recruit_email(e: dict, kind: Optional[str], note: str) -> dict:
+async def send_recruit_email(e: dict, kind: Optional[str], note: str,
+                             attachments: Optional[list] = None, base_url: str = "") -> dict:
     first = (e.get("name", "there").strip().split(" ") or ["there"])[0]
     elig = compute_eligibility(e)
     k = "joining" if elig == "now" else (kind if kind in ("joining", "countdown") else "countdown")
     if k == "joining":
         status = await send_email(e["email"], "Joining 1471 Horwich Squadron \u2014 here's how",
-                                  _joining_instructions_html(first, note), reply_to=NOTIFY_EMAIL)
+                                  _joining_instructions_html(first, note, attachments, base_url),
+                                  reply_to=NOTIFY_EMAIL)
         target = None
     else:
         target = eligible_date(e)
@@ -611,24 +625,36 @@ async def delete_enquiry(enquiry_id: str, staff: dict = Depends(require_staff)):
 class RecruitEmail(BaseModel):
     kind: Optional[str] = None  # joining | countdown
     note: str = Field(default="", max_length=2000)
+    attachment_ids: List[str] = []
+    base_url: str = ""
     model_config = ConfigDict(extra="ignore")
 
 
 class RecruitBulk(BaseModel):
     eligibility: str
     note: str = Field(default="", max_length=2000)
+    attachment_ids: List[str] = []
+    base_url: str = ""
     model_config = ConfigDict(extra="ignore")
+
+
+async def _fetch_attachments(ids: List[str]) -> list:
+    if not ids:
+        return []
+    rows = await db.attachments.find({"id": {"$in": ids}}, {"_id": 0}).to_list(50)
+    return rows
 
 
 @api_router.post("/enquiries/recruit-email/bulk")
 async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require_staff)):
     if payload.eligibility not in ("now", "september", "future"):
         raise HTTPException(status_code=400, detail="Invalid eligibility group")
+    atts = await _fetch_attachments(payload.attachment_ids)
     rows = await db.enquiries.find({"age_band": {"$ne": None}}, {"_id": 0}).to_list(2000)
     sent, skipped = 0, 0
     for e in rows:
         if compute_eligibility(e) == payload.eligibility:
-            res = await send_recruit_email(e, None, payload.note)
+            res = await send_recruit_email(e, None, payload.note, atts, payload.base_url)
             if res.get("email_status") == "sent":
                 sent += 1
             else:
@@ -642,11 +668,59 @@ async def recruit_email(enquiry_id: str, payload: RecruitEmail, staff: dict = De
     e = await db.enquiries.find_one({"id": enquiry_id}, {"_id": 0})
     if not e:
         raise HTTPException(status_code=404, detail="Enquiry not found")
-    res = await send_recruit_email(e, payload.kind, payload.note)
+    atts = await _fetch_attachments(payload.attachment_ids)
+    res = await send_recruit_email(e, payload.kind, payload.note, atts, payload.base_url)
     if not res.get("sent") and res.get("error") == "no_date":
         raise HTTPException(status_code=400,
                             detail="Cannot work out an eligibility date for this enquiry (no date of birth on record).")
     return res
+
+
+# ---------------------------------------------------------------------------
+# Attachments (GridFS-backed; download link is public/unguessable)
+# ---------------------------------------------------------------------------
+@api_router.post("/attachments")
+async def upload_attachment(file: UploadFile = File(...), staff: dict = Depends(require_staff)):
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 15MB).")
+    aid = str(uuid.uuid4())
+    gid = await fs.upload_from_stream(file.filename or "file", data,
+                                      metadata={"attachment_id": aid, "content_type": file.content_type})
+    doc = {"id": aid, "filename": file.filename or "file",
+           "content_type": file.content_type or "application/octet-stream",
+           "size": len(data), "gridfs_id": str(gid), "uploaded_by": staff["id"], "created_at": now_iso()}
+    await db.attachments.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.get("/attachments")
+async def list_attachments(staff: dict = Depends(require_staff)):
+    return await db.attachments.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.get("/attachments/{attachment_id}/download")
+async def download_attachment(attachment_id: str):
+    doc = await db.attachments.find_one({"id": attachment_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    stream = await fs.open_download_stream(ObjectId(doc["gridfs_id"]))
+    data = await stream.read()
+    return Response(content=data, media_type=doc["content_type"],
+                    headers={"Content-Disposition": f'inline; filename="{doc["filename"]}"'})
+
+
+@api_router.delete("/attachments/{attachment_id}")
+async def delete_attachment(attachment_id: str, staff: dict = Depends(require_staff)):
+    doc = await db.attachments.find_one({"id": attachment_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    try:
+        await fs.delete(ObjectId(doc["gridfs_id"]))
+    except Exception:
+        pass
+    await db.attachments.delete_one({"id": attachment_id})
+    return {"deleted": True}
 
 
 # ---------------------------------------------------------------------------
