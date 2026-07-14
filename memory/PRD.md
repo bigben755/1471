@@ -91,8 +91,14 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - **Calendar sync**: public **iCal/ICS feed** at GET /api/calendar/events.ics (Subscribe button on the events calendar copies the link). **Word (.docx) import** (staff): POST /api/events/import-docx parses a training programme (python-docx + dateutil, two-default full-date validation, default 19:00–21:30) into an editable preview; POST /api/events/import bulk-creates. 
 - Facebook chosen as simple share button (not auto-post). Requirements.txt updated (python-docx).
 
-## Backlog / tech debt (open)
+## Phase 4 — Installable App (PWA) + Push notifications — 2026-06-20 (verified iteration_7: backend 123/123, frontend 95%)
+- **Installable PWA**: manifest.json (standalone, start_url /portal, squadron **crest** icons at /public/icons/), apple-touch-icon + iOS meta in index.html, service worker /public/sw.js (push + notificationclick + setAppBadge), registered in src/index.js which also captures beforeinstallprompt.
+- **Web Push (VAPID, self-generated keys in backend/.env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_PEM_B64, VAPID_SUBJECT)**. Endpoints: GET /api/push/vapid-public-key, POST /api/push/subscribe, /push/unsubscribe, /push/test. `push_to_user()` (pywebpush, deletes stale 404/410 subs) fires from `deliver_broadcast` (messages/documents/newsletters) and `create_notice` (role-targeted). Push payload carries `badge`=unread count → app-icon badge on installed PWAs.
+- **In-app banner** (`PwaManager`, top of portal dashboard): "Install app" (Android/desktop when beforeinstallprompt fires) + "Turn on notifications" + iOS Add-to-Home-Screen guidance; dismissible. `enablePush()` wrapped in try/catch (fixed iteration_7 medium bug).
+- Caveat: iPhone/iPad need Add-to-Home-Screen (iOS 16.4+) before push works. Real push delivery can't be validated in headless automation (Chromium treats Push as incognito) — wiring verified at API layer.
+
+## Backlog / tech debt (open, prioritised)
 - P1: Event photo galleries (object storage); parents view photos.
 - P1: Facebook auto-post option (needs Meta Page token) — currently simple share only.
-- P2 (tech debt, cumulative from iterations 3–6): **split server.py (~1580 lines) into routers** (overdue); StreamingResponse for GridFS downloads (currently buffered); BlogUpdate model for partial PATCH; size-check before file buffering; orphaned-GridFS cleanup on cover-image replace; pagination on /public/blogs; zoneinfo('Europe/London') for school-year cutoff; RecruitmentPanel bulk-countdown window.confirm → shadcn dialog; return 201 from POST creators.
+- P2 (tech debt, cumulative iters 3–7): **split server.py (~1680 lines) into routers (overdue; push/blogs/documents/calendar cleanly extractable)**; StreamingResponse for GridFS downloads; nested pydantic schema for PushSubscription (clean 422); cap push_subscriptions per user (~10, LRU); asyncio.gather fan-out for push sends; BlogUpdate partial model; orphaned-GridFS cleanup; pagination on /public/blogs; zoneinfo('Europe/London') for school-year cutoff; RecruitmentPanel bulk-countdown window.confirm → dialog; return 201 from POST creators.
 

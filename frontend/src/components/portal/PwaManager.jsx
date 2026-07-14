@@ -43,6 +43,7 @@ export const PwaManager = () => {
     if (res.ok) { toast.success("Notifications on — you'll be alerted here and on your device."); setNotifState("granted"); refreshBadge(); }
     else if (res.reason === "denied") toast.error("Notifications are blocked. You can allow them in your browser settings.");
     else if (res.reason === "disabled") toast.error("Push isn't configured on the server yet.");
+    else if (res.reason === "error") toast.error("Couldn't turn on notifications. If you're in private browsing, try a normal window.");
     else toast.error("This device or browser doesn't support notifications.");
   };
 

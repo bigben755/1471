@@ -17,20 +17,24 @@ export const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 
 export async function enablePush() {
   if (!pushSupported()) return { ok: false, reason: "unsupported" };
-  const { data: vapid } = await api.get("/push/vapid-public-key");
-  if (!vapid.enabled) return { ok: false, reason: "disabled" };
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") return { ok: false, reason: "denied" };
-  const reg = await navigator.serviceWorker.ready;
-  let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapid.key),
-    });
+  try {
+    const { data: vapid } = await api.get("/push/vapid-public-key");
+    if (!vapid.enabled) return { ok: false, reason: "disabled" };
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") return { ok: false, reason: "denied" };
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapid.key),
+      });
+    }
+    await api.post("/push/subscribe", { subscription: sub.toJSON() });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "error" };
   }
-  await api.post("/push/subscribe", { subscription: sub.toJSON() });
-  return { ok: true };
 }
 
 export async function refreshBadge() {
