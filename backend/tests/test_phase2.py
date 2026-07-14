@@ -104,7 +104,8 @@ class TestCadetEnquiryEligibility:
         assert found in ("september", "now"), f"yr7 landed in unexpected bucket {found}"
 
     def test_enquiry_with_under_12_maps_to_future(self, admin_headers):
-        eid = _post_enquiry("under_12", "2015-06-10", "U12")
+        # A young child whose Year-8 September is several years away stays in 'future'
+        eid = _post_enquiry("under_12", "2018-06-10", "U12")
         r = requests.get(f"{API}/enquiries/tracker", headers=admin_headers)
         assert r.status_code == 200
         assert any(e["id"] == eid for e in r.json()["buckets"]["future"])

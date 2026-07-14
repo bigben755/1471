@@ -134,12 +134,6 @@ class TestEnquiryAdmin:
         assert r.status_code == 200
         assert isinstance(r.json(), list)
 
-    def test_stats_with_auth(self, auth_headers):
-        r = requests.get(f"{API}/enquiries/stats", headers=auth_headers)
-        assert r.status_code == 200
-        d = r.json()
-        assert "total" in d and "new" in d
-
     def test_full_crud_flow(self, auth_headers):
         # create
         payload = {

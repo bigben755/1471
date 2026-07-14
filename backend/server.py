@@ -642,6 +642,8 @@ async def _fetch_attachments(ids: List[str]) -> list:
     if not ids:
         return []
     rows = await db.attachments.find({"id": {"$in": ids}}, {"_id": 0}).to_list(50)
+    order = {aid: i for i, aid in enumerate(ids)}
+    rows.sort(key=lambda a: order.get(a["id"], 999))
     return rows
 
 
