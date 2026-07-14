@@ -840,12 +840,13 @@ async def send_document(document_id: str, payload: DocumentSend, staff: dict = D
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
-    link = f"{payload.base_url}/api/documents/{document_id}/download"
+    abs_link = f"{payload.base_url}/api/documents/{document_id}/download"
+    rel_link = f"/api/documents/{document_id}/download"
     title = f"Document: {doc['title']}"
     body = (payload.message + "\n\n" if payload.message else "") + f"{doc['title']} ({doc['filename']})"
-    email_html = _document_email_html(doc["title"], payload.message, link, from_name)
+    email_html = _document_email_html(doc["title"], payload.message, abs_link, from_name)
     result = await deliver_broadcast(users, title, body, payload.channels, from_name, "document",
-                                     email_html=email_html, link=link, link_label="Download document")
+                                     email_html=email_html, link=rel_link, link_label="Download document")
     return result
 
 

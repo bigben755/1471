@@ -85,9 +85,14 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - **Joining-email attachments + time-aware buckets (2026-06-20):** Joining-instructions emails now support **attachments** (joining form, welcome pack). The managed email proxy can't carry attachments, so files are stored in **MongoDB GridFS** and embedded as secure public download links (`GET /api/attachments/{id}/download`). Attachment CRUD: POST/GET/DELETE /api/attachments (staff), download is public/unguessable. Upload UI in the recruit dialog (single + bulk joining). The 3 tracker buckets are now **time-aware** — `compute_eligibility()` recomputes from a canonical DoB-derived eligibility date on every read, so prospects auto-move future→September→now as time passes. Verified iteration_5: 13/13 new backend tests + 100% frontend flows.
   - Known tech debt: server.py ~1200 lines (split into routers overdue); download buffers whole file (switch to StreamingResponse); consider zoneinfo('Europe/London') for the school-year cutoff; bulk countdown still uses window.confirm (cosmetic).
 
-## Phase 2 backlog / tech debt
+## Phase 3 — Document library, Blogs/News, Calendar sync — 2026-06-20 (verified iteration_6: backend 110/110, frontend 100%)
+- **Document library** (staff Documents tab): upload docs (title/category/visible-to-roles) to a shared GridFS-backed library; members browse docs shared with their role (member Documents tab); staff **Send** any doc to selected groups/individuals (dashboard notification with Download button + email link). Endpoints: POST/GET /api/documents, GET /api/documents/library, PATCH, DELETE, public GET /api/documents/{id}/download, POST /api/documents/{id}/send. Notification `link` stored as a relative path (domain-safe) and prefixed in the UI.
+- **Blogs/News** (staff News tab): draft/publish posts with cover image + photo gallery (GridFS). Published posts appear on the PUBLIC website **/news** + **/news/:slug** (with a **Share to Facebook** button — sharer.php, no API/token) and in a members read-only News tab. Endpoints: /api/blogs CRUD, /api/blogs/upload-image, /api/blogs/image/{id}, public /api/public/blogs (+/{slug}). Header nav gains "News".
+- **Calendar sync**: public **iCal/ICS feed** at GET /api/calendar/events.ics (Subscribe button on the events calendar copies the link). **Word (.docx) import** (staff): POST /api/events/import-docx parses a training programme (python-docx + dateutil, two-default full-date validation, default 19:00–21:30) into an editable preview; POST /api/events/import bulk-creates. 
+- Facebook chosen as simple share button (not auto-post). Requirements.txt updated (python-docx).
+
+## Backlog / tech debt (open)
 - P1: Event photo galleries (object storage); parents view photos.
-- P1: Blogs (in-app) + Facebook auto-post (needs Meta Page token).
-- P2: Word (.docx) training-programme import → calendar events.
-- P2 (tech debt from iteration_3 review): split server.py (~991 lines) into routers; return 201 from POST creators; tighten Audience.mode to a Literal enum; add unit test for the September auto-move; consider asyncio.gather+semaphore for large email sends; optional shadcn Calendar on the Join DoB field.
+- P1: Facebook auto-post option (needs Meta Page token) — currently simple share only.
+- P2 (tech debt, cumulative from iterations 3–6): **split server.py (~1580 lines) into routers** (overdue); StreamingResponse for GridFS downloads (currently buffered); BlogUpdate model for partial PATCH; size-check before file buffering; orphaned-GridFS cleanup on cover-image replace; pagination on /public/blogs; zoneinfo('Europe/London') for school-year cutoff; RecruitmentPanel bulk-countdown window.confirm → shadcn dialog; return 201 from POST creators.
 

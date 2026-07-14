@@ -3,6 +3,8 @@ import { api } from "../../api";
 import { PanelHeading } from "./PortalShell";
 import { Loader2, Inbox, Mail, Newspaper, MessageSquare, CheckCheck, Download, FileText } from "lucide-react";
 
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
 export const NotificationsPanel = ({ onRead }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export const NotificationsPanel = ({ onRead }) => {
                     </div>
                     <p className="mt-2 text-raf-slate leading-relaxed whitespace-pre-line text-sm">{n.body}</p>
                     {n.link && (
-                      <a data-testid={`notification-link-${n.id}`} href={n.link} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-raf-red text-white hover:bg-[#A00926] transition-colors">
+                      <a data-testid={`notification-link-${n.id}`} href={n.link.startsWith("/api") ? `${BASE_URL}${n.link}` : n.link} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-raf-red text-white hover:bg-[#A00926] transition-colors">
                         <Download size={14} /> {n.link_label || "Open"}
                       </a>
                     )}
