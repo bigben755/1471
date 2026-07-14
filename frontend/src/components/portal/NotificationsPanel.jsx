@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "../../api";
 import { PanelHeading } from "./PortalShell";
-import { Loader2, Inbox, Mail, Newspaper, MessageSquare, CheckCheck } from "lucide-react";
+import { Loader2, Inbox, Mail, Newspaper, MessageSquare, CheckCheck, Download, FileText } from "lucide-react";
 
 export const NotificationsPanel = ({ onRead }) => {
   const [items, setItems] = useState([]);
@@ -30,7 +30,7 @@ export const NotificationsPanel = ({ onRead }) => {
       ) : (
         <div className="space-y-3" data-testid="notifications-list">
           {items.map((n) => {
-            const Icon = n.kind === "newsletter" ? Newspaper : MessageSquare;
+            const Icon = n.kind === "newsletter" ? Newspaper : n.kind === "document" ? FileText : MessageSquare;
             return (
               <div key={n.id} data-testid={`notification-${n.id}`} className={`bg-white border border-white p-5 border-l-4 ${n.read ? "border-l-raf-sky" : "border-l-raf-red"}`}>
                 <div className="flex items-start gap-3">
@@ -43,6 +43,11 @@ export const NotificationsPanel = ({ onRead }) => {
                       {n.channels?.includes("email") && <span className="text-[10px] uppercase bg-raf-sky text-raf-blue px-2 py-0.5 flex items-center gap-1"><Mail size={10} /> Emailed</span>}
                     </div>
                     <p className="mt-2 text-raf-slate leading-relaxed whitespace-pre-line text-sm">{n.body}</p>
+                    {n.link && (
+                      <a data-testid={`notification-link-${n.id}`} href={n.link} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-raf-red text-white hover:bg-[#A00926] transition-colors">
+                        <Download size={14} /> {n.link_label || "Open"}
+                      </a>
+                    )}
                     <div className="mt-3 text-xs text-raf-slate">
                       {n.from_name} &middot; {new Date(n.created_at).toLocaleString("en-GB")}
                     </div>

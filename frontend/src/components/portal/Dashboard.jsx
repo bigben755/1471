@@ -13,8 +13,12 @@ import { EnquiriesPanel } from "./EnquiriesPanel";
 import { RecruitmentPanel } from "./RecruitmentPanel";
 import { CommsPanel } from "./CommsPanel";
 import { NotificationsPanel } from "./NotificationsPanel";
+import { DocumentsPanel } from "./DocumentsPanel";
+import { MemberDocumentsPanel } from "./MemberDocumentsPanel";
+import { BlogAdminPanel } from "./BlogAdminPanel";
+import { MemberNewsPanel } from "./MemberNewsPanel";
 import {
-  CalendarDays, Award, Bell, MessageSquare, Users, Inbox, Settings, UserSearch, Megaphone, Mail,
+  CalendarDays, Award, Bell, MessageSquare, Users, Inbox, Settings, UserSearch, Megaphone, Mail, FolderOpen, Newspaper,
 } from "lucide-react";
 
 const TABS = {
@@ -22,6 +26,8 @@ const TABS = {
     { key: "calendar", label: "Calendar", icon: CalendarDays },
     { key: "points", label: "Points", icon: Award },
     { key: "notices", label: "Notices", icon: Bell },
+    { key: "documents", label: "Documents", icon: FolderOpen },
+    { key: "news", label: "News", icon: Newspaper },
     { key: "inbox", label: "Inbox", icon: Mail },
     { key: "messages", label: "Messages", icon: MessageSquare },
     { key: "account", label: "Account", icon: Settings },
@@ -29,6 +35,8 @@ const TABS = {
   parent: [
     { key: "calendar", label: "Calendar", icon: CalendarDays },
     { key: "notices", label: "Notices", icon: Bell },
+    { key: "documents", label: "Documents", icon: FolderOpen },
+    { key: "news", label: "News", icon: Newspaper },
     { key: "inbox", label: "Inbox", icon: Mail },
     { key: "messages", label: "Messages", icon: MessageSquare },
     { key: "account", label: "Account", icon: Settings },
@@ -38,6 +46,8 @@ const TABS = {
     { key: "members", label: "Members", icon: Users },
     { key: "recruitment", label: "Recruitment", icon: UserSearch },
     { key: "notices", label: "Notices", icon: Bell },
+    { key: "documents", label: "Documents", icon: FolderOpen },
+    { key: "news", label: "News", icon: Newspaper },
     { key: "comms", label: "Comms", icon: Megaphone },
     { key: "enquiries", label: "Enquiries", icon: Inbox },
     { key: "messages", label: "Messages", icon: MessageSquare },
@@ -77,6 +87,8 @@ export const Dashboard = () => {
       case "members": return <ManageUsersPanel />;
       case "recruitment": return <RecruitmentPanel />;
       case "comms": return <CommsPanel />;
+      case "documents": return isStaff ? <DocumentsPanel /> : <MemberDocumentsPanel />;
+      case "news": return isStaff ? <BlogAdminPanel /> : <MemberNewsPanel />;
       case "enquiries": return <EnquiriesPanel />;
       case "inbox": return <NotificationsPanel onRead={() => setUnread(0)} />;
       case "account": return <AccountPanel />;

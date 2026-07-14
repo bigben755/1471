@@ -1,0 +1,52 @@
+{
+  "summary": "Iteration 6 — end-to-end verification of the THREE new feature areas (Documents Library, Blogs/News, Calendar ICS+Word import). New pytest file /app/backend/tests/test_documents_blogs_calendar.py (31 tests, all pass). Full backend suite now 110/110 passing (previous stale failures fixed by upstream changes). Playwright drives every documented user flow: (a) admin uploads a doc, sends to parents, deletes it — toast 'Sent to 1 recipient(s).1 to dashboards, 1 email(s).' seen; (b) admin creates published post + draft, /news lists only the published post, /news/:slug renders body, share-facebook opens a real https://www.facebook.com/sharer/sharer.php?u=... popup, back-to-news works; cadet sees the same post in member-news-list; (c) ICS Subscribe copies the /api/calendar/events.ics link and toasts, Word .docx (built on the fly with python-docx) parses into 3 preview rows and import creates 3 events that appear in the calendar; ICS public feed returns valid text/calendar with those events; (d) parent Inbox shows the sent-document notifications with correct Download-button hrefs pointing at /api/documents/<id>/download. Draft posts are correctly hidden from /public/blogs. No blocking issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PATCH /api/blogs/{id}", "issue": "Uses BlogCreate schema (title min_length=2 + body min_length=1 required). Cannot do a partial update like {'status':'published'} — returns 422. Frontend BlogAdminPanel always sends the full payload so this is fine in practice, but the endpoint is misleadingly named PATCH; consider making all BlogCreate fields Optional or introducing a BlogUpdate model with partial semantics."},
+      {"endpoint": "GET /api/documents/{id}/download", "issue": "Buffers the whole GridFS blob into memory (data = await stream.read()) before returning. Same pattern used for /api/blogs/image/{id}. StreamingResponse over fs.open_download_stream would scale better under concurrent downloads."},
+      {"endpoint": "POST /api/documents & /api/events/import-docx & /api/blogs/upload-image", "issue": "Each does await file.read() before the size check, so an oversized upload is still fully buffered in memory before the 413 is returned. Prefer a Content-Length pre-check or a chunked-read + early abort."},
+      {"endpoint": "POST /api/documents/{id}/send", "issue": "payload.base_url is trusted verbatim from the client and embedded into outgoing email HTML plus dashboard notifications (`link` field). Low risk today (staff-only) but a safer default is deriving base_url from request.base_url or a SITE_BASE_URL env var. Same issue was flagged in iteration_5 for /enquiries/{id}/recruit-email."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CalendarPanel", "issues": ["Subscribe ICS still writes a JS confirm-less clipboard toast that is fine, but 'Subscribe' does not offer a fallback 'Copy manually' path if the browser blocks clipboard-write (Safari private mode). Consider showing the URL in a small popover for manual copy."]},
+      {"screen": "BlogAdminPanel", "issues": ["Post list shows only title + status badge but no published_at date column; author name is 'Staff' rather than the admin's actual name (backend author_name is set correctly for new posts — appears to be only a display issue on the list card)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_documents_blogs_calendar.py",
+    "/app/test_reports/pytest/pytest_iter6.xml",
+    "/app/test_reports/pytest/pytest_iter6_all.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: derive base_url server-side (request.base_url or SITE_BASE_URL env) for documents/send and enquiries/recruit-email — safer than trusting the client to supply it.",
+    "OPTIONAL: introduce BlogUpdate model with Optional fields so PATCH /api/blogs/{id} supports partial updates (e.g. flipping status without re-sending title/body).",
+    "OPTIONAL: swap document/image download endpoints to StreamingResponse(fs.open_download_stream(...)) to avoid buffering GridFS blobs in memory.",
+    "PRE-EXISTING (still open from iterations 3/4/5): server.py is now 1583 lines — split into routers (auth/users/events/notices/messages/enquiries/recruit/attachments/broadcast/newsletters/documents/blogs/calendar) is overdue.",
+    "PRE-EXISTING (still open from iteration 5): RecruitmentPanel.handleBulk() still uses window.confirm() for the countdown buckets — inconsistent with the shadcn dialog used everywhere else."
+  ],
+  "critical_code_review_comments": [
+    "server.py: 1583 lines — repeatedly flagged. The Documents (~90 lines), Blogs (~110 lines), Calendar/ICS+Word (~140 lines) additions in this iteration are cleanly separable modules; splitting into routers is now mandatory-for-maintainability.",
+    "PATCH /api/blogs/{id} reuses BlogCreate — validation forces callers to send the full payload for a status flip. Fine today because the frontend does that, but the API contract is misleading. Introduce BlogUpdate with Optional[str] fields.",
+    "_parse_docx_events discards rows where a date can't be parsed (correct — the docx importer test verified heading-only rows are ignored) but it silently drops rows: consider returning parsed vs skipped counts so the staff-facing preview can warn 'N rows could not be parsed'.",
+    "deliver_broadcast now carries link/link_label — good. But the dashboard notification is inserted with the full absolute URL (payload.base_url + /api/documents/<id>/download). If the site domain changes, historical notifications will keep pointing at the old host. Consider storing only the path and letting the UI prefix it with REACT_APP_BACKEND_URL at render time.",
+    "public/blogs endpoint returns list without pagination — with a large news archive this will grow unbounded (currently capped at 200 in code, but no page/query parameters). Add ?limit and ?skip.",
+    "GridFS blobs for blog images and documents are never garbage-collected if a document is edited (cover_image_url swapped out) — the previous gridfs blob is orphaned. Add a cleanup pass or delete-on-replace."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_documents_blogs_calendar.py (new — 31 tests, all pass)",
+    "/app/test_reports/pytest/pytest_iter6.xml (new junit)",
+    "/app/test_reports/pytest/pytest_iter6_all.xml (full-suite junit; 110/110 passing)"
+  ],
+  "success_rate": {"backend": "100% (110/110)", "frontend": "100% of all tested flows (documents staff+member+parent, blogs admin+public+cadet, calendar ICS+word-import+public feed, parent inbox notifications)"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471! ; cadet@1471horwich.org.uk / Cadet1471! ; parent@1471horwich.org.uk / Parent1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "All test data is created + cleaned up in-flight (documents/blogs deleted at end of each test class; imported events deleted). One residual attachment (from iter 5) and a few historical parent notifications remain in the parent inbox for verification — none of these are UI_TEST-prefixed rows left by iter 6.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New backend test file: /app/backend/tests/test_documents_blogs_calendar.py. Full suite is now: test_backend.py + test_phase2.py + test_portal.py + test_recruit_email.py + test_attachments_and_buckets.py + test_documents_blogs_calendar.py = 110 tests, all passing. Run: REACT_APP_BACKEND_URL=https://raf-horwich.preview.emergentagent.com python -m pytest backend/tests/ -v (2m15s). New data-testids exercised: upload-document-btn, document-upload-dialog, doc-title, doc-category, doc-role-cadet/parent, doc-file, doc-upload-submit, documents-list, document-<id>, document-download-<id>, document-send-<id>, document-delete-<id>, document-send-dialog, doc-send-message, doc-channel-dashboard, doc-channel-email, doc-send-confirm, member-documents-list, member-document-<id>, new-post-btn, posts-list, post-<id>, post-view-<id>, post-edit-<id>, post-delete-<id>, post-editor, post-title, post-excerpt, post-body, post-cover-btn, post-cover-input, post-gallery-input, post-save-draft, post-publish, member-news-list, member-news-<slug>, subscribe-ics-button, import-word-button, word-import-dialog, word-file-input, word-choose-btn, word-preview, preview-row-<i>, word-import-confirm, news-page, news-card-<slug>, news-detail-page, share-facebook, back-to-news, recipient-mode-roles, recipient-role-parent, notification-link-<id>. Facebook share is confirmed to open a real Facebook sharer popup (share-facebook click triggers window.open('https://www.facebook.com/sharer/sharer.php?u=...')). Word import needs python-docx installed on the test runner (already present).",
+  "rca of the issue": "No blocking issues. Two initial test failures during writing were self-inflicted: (1) sending only {'status':'published'} to PATCH /blogs raised 422 because BlogCreate requires title+body — fixed by sending the full payload (mirrors what the frontend does); (2) /enquiries/tracker returns {'buckets':..., 'counts':..., 'labels':...} not the buckets at the top level — my test was fixed to unwrap 'buckets' first. The 422 on PATCH /blogs is arguably a minor API smell but not a bug given the frontend contract."
+}

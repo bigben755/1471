@@ -11,6 +11,8 @@ import ParentsPage from "@/pages/site/ParentsPage";
 import VolunteerPage from "@/pages/site/VolunteerPage";
 import FaqPage from "@/pages/site/FaqPage";
 import JoinPage from "@/pages/site/JoinPage";
+import NewsPage from "@/pages/site/NewsPage";
+import NewsDetailPage from "@/pages/site/NewsDetailPage";
 import Portal from "@/pages/Portal";
 
 function App() {
@@ -27,6 +29,8 @@ function App() {
             <Route path="/parents" element={<ParentsPage />} />
             <Route path="/volunteer" element={<VolunteerPage />} />
             <Route path="/faq" element={<FaqPage />} />
+            <Route path="/news" element={<NewsPage />} />
+            <Route path="/news/:slug" element={<NewsDetailPage />} />
             <Route path="/join" element={<JoinPage />} />
           </Route>
           <Route path="/portal" element={<Portal />} />

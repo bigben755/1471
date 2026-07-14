@@ -5,6 +5,8 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import re
+import io
 import logging
 import uuid
 import asyncio
@@ -15,7 +17,7 @@ import jwt
 import bcrypt
 import httpx
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
@@ -504,7 +506,8 @@ async def resolve_recipients(a: Audience) -> List[dict]:
 
 
 async def deliver_broadcast(users: List[dict], title: str, body: str, channels: List[str],
-                            from_name: str, kind: str, email_html: Optional[str] = None) -> dict:
+                            from_name: str, kind: str, email_html: Optional[str] = None,
+                            link: Optional[str] = None, link_label: Optional[str] = None) -> dict:
     channels = [c for c in channels if c in ("dashboard", "email")] or ["dashboard"]
     docs, emails_sent = [], 0
     for u in users:
@@ -518,6 +521,7 @@ async def deliver_broadcast(users: List[dict], title: str, body: str, channels: 
             docs.append({"id": str(uuid.uuid4()), "user_id": u["id"], "title": title,
                          "body": body, "from_name": from_name, "kind": kind,
                          "channels": channels, "email_status": email_status,
+                         "link": link, "link_label": link_label,
                          "read": False, "created_at": now_iso()})
     if docs:
         await db.notifications.insert_many(docs)
@@ -723,6 +727,242 @@ async def delete_attachment(attachment_id: str, staff: dict = Depends(require_st
         pass
     await db.attachments.delete_one({"id": attachment_id})
     return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Document library (GridFS-backed, browsable + shareable)
+# ---------------------------------------------------------------------------
+class DocumentSend(BaseModel):
+    audience: Audience = Field(default_factory=Audience)
+    channels: List[str] = ["dashboard", "email"]
+    message: str = Field(default="", max_length=2000)
+    base_url: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+
+class DocumentMeta(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    category: str = Field(default="General", max_length=80)
+    visible_roles: List[str] = []
+    model_config = ConfigDict(extra="ignore")
+
+
+def _document_out(d: dict) -> dict:
+    return {k: v for k, v in d.items() if k not in ("_id", "gridfs_id")}
+
+
+def _document_email_html(title: str, message: str, link: str, from_name: str) -> str:
+    msg = f'<p>{message}</p>' if message else ""
+    inner = f"""
+      {msg}
+      <p>A document has been shared with you: <strong>{title}</strong></p>
+      <p><a href="{link}" style="display:inline-block;background:#C60C30;color:#fff;padding:12px 22px;text-decoration:none;font-weight:bold;">Download document</a></p>
+      <p style="font-size:12px;color:#5b6b78;">Or copy this link: {link}</p>
+      <p style="margin-top:18px;">&mdash; {from_name}</p>"""
+    return _email_shell(title, inner)
+
+
+@api_router.post("/documents")
+async def upload_document(file: UploadFile = File(...), title: str = Form(...),
+                          category: str = Form("General"), visible_roles: str = Form(""),
+                          staff: dict = Depends(require_staff)):
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 15MB).")
+    roles = [r for r in visible_roles.split(",") if r in ALL_ROLES]
+    gid = await fs.upload_from_stream(file.filename or "file", data,
+                                      metadata={"content_type": file.content_type})
+    doc = {"id": str(uuid.uuid4()), "title": title.strip(), "category": (category or "General").strip(),
+           "filename": file.filename or "file", "content_type": file.content_type or "application/octet-stream",
+           "size": len(data), "gridfs_id": str(gid), "visible_roles": roles,
+           "uploaded_by": staff["id"],
+           "uploaded_by_name": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Staff",
+           "created_at": now_iso()}
+    await db.documents.insert_one(doc)
+    return _document_out(doc)
+
+
+@api_router.get("/documents")
+async def list_documents(staff: dict = Depends(require_staff)):
+    rows = await db.documents.find({}, {"gridfs_id": 0}).sort("created_at", -1).to_list(1000)
+    return [_document_out(d) for d in rows]
+
+
+@api_router.get("/documents/library")
+async def library_documents(user: dict = Depends(get_current_user)):
+    rows = await db.documents.find({"visible_roles": user["role"]}, {"gridfs_id": 0}).sort("created_at", -1).to_list(1000)
+    return [_document_out(d) for d in rows]
+
+
+@api_router.patch("/documents/{document_id}")
+async def update_document(document_id: str, payload: DocumentMeta, staff: dict = Depends(require_staff)):
+    roles = [r for r in payload.visible_roles if r in ALL_ROLES]
+    d = await db.documents.find_one_and_update(
+        {"id": document_id},
+        {"$set": {"title": payload.title.strip(), "category": (payload.category or "General").strip(),
+                  "visible_roles": roles}},
+        projection={"_id": 0, "gridfs_id": 0}, return_document=True)
+    if not d:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return d
+
+
+@api_router.get("/documents/{document_id}/download")
+async def download_document(document_id: str):
+    doc = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    stream = await fs.open_download_stream(ObjectId(doc["gridfs_id"]))
+    data = await stream.read()
+    return Response(content=data, media_type=doc["content_type"],
+                    headers={"Content-Disposition": f'inline; filename="{doc["filename"]}"'})
+
+
+@api_router.delete("/documents/{document_id}")
+async def delete_document(document_id: str, staff: dict = Depends(require_staff)):
+    doc = await db.documents.find_one({"id": document_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        await fs.delete(ObjectId(doc["gridfs_id"]))
+    except Exception:
+        pass
+    await db.documents.delete_one({"id": document_id})
+    return {"deleted": True}
+
+
+@api_router.post("/documents/{document_id}/send")
+async def send_document(document_id: str, payload: DocumentSend, staff: dict = Depends(require_staff)):
+    doc = await db.documents.find_one({"id": document_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    users = await resolve_recipients(payload.audience)
+    if not users:
+        raise HTTPException(status_code=400, detail="No recipients match this audience")
+    from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
+    link = f"{payload.base_url}/api/documents/{document_id}/download"
+    title = f"Document: {doc['title']}"
+    body = (payload.message + "\n\n" if payload.message else "") + f"{doc['title']} ({doc['filename']})"
+    email_html = _document_email_html(doc["title"], payload.message, link, from_name)
+    result = await deliver_broadcast(users, title, body, payload.channels, from_name, "document",
+                                     email_html=email_html, link=link, link_label="Download document")
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Blog / News (staff author; published posts are public + shown in portal)
+# ---------------------------------------------------------------------------
+def _slugify(text: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "-", (text or "").lower()).strip("-")
+    return (s or "post")[:60] + "-" + uuid.uuid4().hex[:6]
+
+
+class BlogCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    excerpt: str = Field(default="", max_length=500)
+    body: str = Field(..., min_length=1, max_length=40000)
+    cover_image_url: str = Field(default="", max_length=1000)
+    images: List[str] = []
+    status: str = "draft"  # draft | published
+    model_config = ConfigDict(extra="ignore")
+
+
+def _blog_out(b: dict) -> dict:
+    return {k: v for k, v in b.items() if k != "_id"}
+
+
+def _blog_public(b: dict) -> dict:
+    return {"title": b["title"], "slug": b["slug"], "excerpt": b.get("excerpt", ""),
+            "cover_image_url": b.get("cover_image_url", ""), "images": b.get("images", []),
+            "body": b.get("body", ""), "author_name": b.get("author_name", ""),
+            "published_at": b.get("published_at")}
+
+
+@api_router.post("/blogs")
+async def create_blog(payload: BlogCreate, staff: dict = Depends(require_staff)):
+    now = now_iso()
+    b = {"id": str(uuid.uuid4()), "slug": _slugify(payload.title),
+         "title": payload.title, "excerpt": payload.excerpt, "body": payload.body,
+         "cover_image_url": payload.cover_image_url, "images": payload.images,
+         "status": payload.status if payload.status in ("draft", "published") else "draft",
+         "author_id": staff["id"],
+         "author_name": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Staff",
+         "created_at": now, "updated_at": now,
+         "published_at": now if payload.status == "published" else None}
+    await db.blogs.insert_one(b)
+    return _blog_out(b)
+
+
+@api_router.get("/blogs")
+async def list_blogs(staff: dict = Depends(require_staff)):
+    rows = await db.blogs.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return rows
+
+
+@api_router.patch("/blogs/{blog_id}")
+async def update_blog(blog_id: str, payload: BlogCreate, staff: dict = Depends(require_staff)):
+    existing = await db.blogs.find_one({"id": blog_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Post not found")
+    upd = {"title": payload.title, "excerpt": payload.excerpt, "body": payload.body,
+           "cover_image_url": payload.cover_image_url, "images": payload.images,
+           "status": payload.status if payload.status in ("draft", "published") else "draft",
+           "updated_at": now_iso()}
+    if payload.status == "published" and not existing.get("published_at"):
+        upd["published_at"] = now_iso()
+    if payload.status == "draft":
+        upd["published_at"] = None
+    b = await db.blogs.find_one_and_update({"id": blog_id}, {"$set": upd},
+                                           projection={"_id": 0}, return_document=True)
+    return b
+
+
+@api_router.delete("/blogs/{blog_id}")
+async def delete_blog(blog_id: str, staff: dict = Depends(require_staff)):
+    res = await db.blogs.delete_one({"id": blog_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return {"deleted": True}
+
+
+@api_router.post("/blogs/upload-image")
+async def upload_blog_image(file: UploadFile = File(...), staff: dict = Depends(require_staff)):
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image too large (maximum 8MB).")
+    iid = str(uuid.uuid4())
+    gid = await fs.upload_from_stream(file.filename or "image", data,
+                                      metadata={"content_type": file.content_type, "blog_image_id": iid})
+    await db.blog_images.insert_one({"id": iid, "gridfs_id": str(gid),
+                                     "content_type": file.content_type or "image/jpeg", "created_at": now_iso()})
+    return {"id": iid, "url": f"/api/blogs/image/{iid}"}
+
+
+@api_router.get("/blogs/image/{image_id}")
+async def get_blog_image(image_id: str):
+    img = await db.blog_images.find_one({"id": image_id}, {"_id": 0})
+    if not img:
+        raise HTTPException(status_code=404, detail="Image not found")
+    stream = await fs.open_download_stream(ObjectId(img["gridfs_id"]))
+    data = await stream.read()
+    return Response(content=data, media_type=img["content_type"],
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
+@api_router.get("/public/blogs")
+async def public_blogs():
+    rows = await db.blogs.find({"status": "published"}, {"_id": 0}).sort("published_at", -1).to_list(200)
+    return [{"title": b["title"], "slug": b["slug"], "excerpt": b.get("excerpt", ""),
+             "cover_image_url": b.get("cover_image_url", ""), "author_name": b.get("author_name", ""),
+             "published_at": b.get("published_at")} for b in rows]
+
+
+@api_router.get("/public/blogs/{slug}")
+async def public_blog(slug: str):
+    b = await db.blogs.find_one({"slug": slug, "status": "published"}, {"_id": 0})
+    if not b:
+        raise HTTPException(status_code=404, detail="Post not found")
+    return _blog_public(b)
 
 
 # ---------------------------------------------------------------------------
@@ -1135,6 +1375,142 @@ async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: di
     return result
 
 
+# ---------------------------------------------------------------------------
+# Calendar: ICS subscribe feed + Word (.docx) training-programme import
+# ---------------------------------------------------------------------------
+class ImportedEvent(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    start: str
+    end: Optional[str] = None
+    description: str = ""
+    location: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+
+class EventsImport(BaseModel):
+    events: List[ImportedEvent]
+    model_config = ConfigDict(extra="ignore")
+
+
+def _ics_escape(t: str) -> str:
+    return (t or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _ics_dt(iso: str) -> Optional[str]:
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+@api_router.get("/calendar/events.ics")
+async def events_ics():
+    rows = await db.events.find({}, {"_id": 0}).sort("start", 1).to_list(2000)
+    lines = ["BEGIN:VCALENDAR", "VERSION:2.0",
+             "PRODID:-//1471 Horwich Squadron//RAF Air Cadets//EN", "CALSCALE:GREGORIAN",
+             "METHOD:PUBLISH", "X-WR-CALNAME:1471 Horwich Squadron Events"]
+    for e in rows:
+        dtstart = _ics_dt(e.get("start", ""))
+        if not dtstart:
+            continue
+        lines += ["BEGIN:VEVENT", f"UID:{e['id']}@1471horwich.org.uk",
+                  f"DTSTAMP:{_ics_dt(e.get('created_at') or now_iso()) or dtstart}",
+                  f"DTSTART:{dtstart}"]
+        dtend = _ics_dt(e.get("end") or "")
+        if dtend:
+            lines.append(f"DTEND:{dtend}")
+        lines.append(f"SUMMARY:{_ics_escape(e.get('title', ''))}")
+        if e.get("location"):
+            lines.append(f"LOCATION:{_ics_escape(e['location'])}")
+        if e.get("description"):
+            lines.append(f"DESCRIPTION:{_ics_escape(e['description'])}")
+        lines.append("END:VEVENT")
+    lines.append("END:VCALENDAR")
+    body = "\r\n".join(lines) + "\r\n"
+    return Response(content=body, media_type="text/calendar; charset=utf-8",
+                    headers={"Content-Disposition": 'inline; filename="1471-horwich-events.ics"'})
+
+
+def _parse_docx_events(data: bytes) -> list:
+    from docx import Document as DocxDocument
+    from dateutil import parser as dateparser
+    doc = DocxDocument(io.BytesIO(data))
+    rows = []
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                rows.append(cells)
+    for p in doc.paragraphs:
+        t = p.text.strip()
+        if t:
+            rows.append([t])
+    year = datetime.now(timezone.utc).year
+    headers = {"date", "activity", "event", "events", "notes", "week", "time", "programme", "program"}
+    out, seen = [], set()
+    for cells in rows:
+        if all(c.lower() in headers for c in cells):
+            continue
+        date_obj, date_cell = None, None
+        for c in cells:
+            if not any(ch.isdigit() for ch in c):
+                continue
+            try:
+                d1 = dateparser.parse(c, fuzzy=True, dayfirst=True, default=datetime(year, 1, 1))
+                d2 = dateparser.parse(c, fuzzy=True, dayfirst=True, default=datetime(year, 6, 15))
+            except Exception:
+                continue
+            # Only accept a fully-specified day+month (reject bare years like "2026")
+            if d1.date() == d2.date():
+                date_obj, date_cell = d1, c
+                break
+        if not date_obj:
+            continue
+        others = [c for c in cells if c != date_cell]
+        title = max(others, key=len) if others else (cells[0].replace(date_cell, "").strip(" -–—:") or "Squadron event")
+        d = date_obj.date()
+        key = (d.isoformat(), title.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"title": title[:200], "start": f"{d.isoformat()}T19:00:00",
+                    "end": f"{d.isoformat()}T21:30:00", "description": "", "location": "Squadron HQ",
+                    "date_label": d.strftime("%a %d %b %Y")})
+    return out
+
+
+@api_router.post("/events/import-docx")
+async def import_docx(file: UploadFile = File(...), staff: dict = Depends(require_staff)):
+    if not (file.filename or "").lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Please upload a Word .docx document.")
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 10MB).")
+    try:
+        events = _parse_docx_events(data)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read the document: {exc}")
+    return {"events": events, "count": len(events)}
+
+
+@api_router.post("/events/import")
+async def import_events(payload: EventsImport, staff: dict = Depends(require_staff)):
+    created = 0
+    for ie in payload.events:
+        event = {"id": str(uuid.uuid4()), "title": ie.title, "description": ie.description,
+                 "location": ie.location or "Squadron HQ", "start": ie.start, "end": ie.end,
+                 "capacity": 0, "event_type": "standard", "participation": "attend", "points_value": 10,
+                 "bids": [], "attendees": [], "created_by": staff["id"], "created_at": now_iso()}
+        await db.events.insert_one(event)
+        created += 1
+    return {"created": created}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1197,6 +1573,7 @@ async def on_startup():
     await db.notice_acks.create_index([("notice_id", 1), ("user_id", 1)], unique=True)
     await db.messages.create_index("member_id")
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+    await db.documents.create_index([("visible_roles", 1), ("created_at", -1)])
     await seed_users()
 
 

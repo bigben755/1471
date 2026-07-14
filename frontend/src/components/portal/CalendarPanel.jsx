@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
@@ -8,7 +8,78 @@ import { PanelHeading } from "./PortalShell";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "../ui/dialog";
-import { Plus, Loader2, Trash2 } from "lucide-react";
+import { Plus, Loader2, Trash2, CalendarPlus, Upload, X, FileText } from "lucide-react";
+
+const ICS_URL = `${process.env.REACT_APP_BACKEND_URL}/api/calendar/events.ics`;
+
+function ImportWordDialog({ open, onClose, onImported }) {
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+
+  const reset = () => { setPreview(null); if (fileRef.current) fileRef.current.value = ""; };
+
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const { data } = await api.post("/events/import-docx", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      if (!data.events.length) toast.error("No dated events found in that document.");
+      setPreview(data.events);
+    } catch (err) { toast.error(err.response?.data?.detail || "Could not read the document."); }
+    finally { setBusy(false); }
+  };
+
+  const confirm = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.post("/events/import", { events: preview.map(({ date_label, ...e }) => e) });
+      toast.success(`${data.created} event(s) added to the calendar.`);
+      reset(); onImported(); onClose();
+    } catch (err) { toast.error(err.response?.data?.detail || "Could not import."); }
+    finally { setBusy(false); }
+  };
+
+  const upd = (i, k, v) => setPreview((p) => p.map((e, j) => j === i ? { ...e, [k]: v } : e));
+  const del = (i) => setPreview((p) => p.filter((_, j) => j !== i));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { reset(); onClose(); } }}>
+      <DialogContent data-testid="word-import-dialog" className="max-w-2xl rounded-none max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle className="font-display text-raf-navy">Import training programme (Word)</DialogTitle><DialogDescription className="sr-only">Upload a Word document to create calendar events</DialogDescription></DialogHeader>
+        {!preview ? (
+          <div className="py-4">
+            <input ref={fileRef} type="file" accept=".docx" data-testid="word-file-input" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+            <button data-testid="word-choose-btn" onClick={() => fileRef.current?.click()} disabled={busy} className="w-full inline-flex items-center justify-center gap-2 px-4 py-6 border border-dashed border-raf-sky text-raf-slate hover:border-raf-blue transition-colors">
+              {busy ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />} {busy ? "Reading document..." : "Choose a .docx file"}
+            </button>
+            <p className="mt-2 text-xs text-raf-slate">We'll pull out dated rows (date + activity). You can review and edit everything before anything is added.</p>
+          </div>
+        ) : (
+          <div className="space-y-2" data-testid="word-preview">
+            <p className="text-sm text-raf-slate">{preview.length} event(s) found. Review, edit or remove, then import. Times default to 19:00–21:30.</p>
+            {preview.map((e, i) => (
+              <div key={i} data-testid={`preview-row-${i}`} className="flex items-center gap-2 border border-raf-sky p-2">
+                <input type="datetime-local" value={e.start} onChange={(ev) => upd(i, "start", ev.target.value)} className="border border-raf-sky px-2 py-1.5 text-xs" />
+                <input value={e.title} onChange={(ev) => upd(i, "title", ev.target.value)} className="flex-1 border border-raf-sky px-2 py-1.5 text-sm" />
+                <button onClick={() => del(i)} className="text-raf-red hover:text-raf-navy p-1"><X size={15} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+        <DialogFooter className="gap-2">
+          {preview && <button onClick={reset} className="px-4 py-2.5 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors">Choose another file</button>}
+          {preview && preview.length > 0 && (
+            <button data-testid="word-import-confirm" onClick={confirm} disabled={busy} className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors disabled:opacity-60">
+              {busy ? <Loader2 className="animate-spin" size={16} /> : <FileText size={16} />} Import {preview.length} event(s)
+            </button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const blank = {
   title: "", description: "", location: "", start: "", end: "",
@@ -129,6 +200,7 @@ export const CalendarPanel = ({ canManage }) => {
   const [selected, setSelected] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -138,6 +210,13 @@ export const CalendarPanel = ({ canManage }) => {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const subscribe = async () => {
+    try { await navigator.clipboard.writeText(ICS_URL); } catch { /* ignore */ }
+    toast.success("Calendar link copied", {
+      description: "Add it as a subscribed/internet calendar in Google, Apple or Outlook to stay in sync.",
+    });
+  };
 
   const openEvent = (e) => {
     if (canManage) { setEditing(e); setFormOpen(true); }
@@ -149,11 +228,23 @@ export const CalendarPanel = ({ canManage }) => {
       <PanelHeading
         title="Events calendar"
         intro={canManage ? "Create events, manage bids and mark attendance." : "Tap an event to see details" + (user?.role === "cadet" ? " and bid for a place." : ".")}
-        action={canManage && (
-          <button data-testid="new-event-button" onClick={() => { setEditing(null); setFormOpen(true); }} className="inline-flex items-center gap-2 px-5 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors">
-            <Plus size={18} /> New event
-          </button>
-        )}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <button data-testid="subscribe-ics-button" onClick={subscribe} className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-blue text-raf-blue hover:bg-raf-blue hover:text-white transition-colors text-sm font-semibold">
+              <CalendarPlus size={17} /> Subscribe
+            </button>
+            {canManage && (
+              <button data-testid="import-word-button" onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-sky text-raf-navy hover:border-raf-blue transition-colors text-sm font-semibold">
+                <Upload size={17} /> Import Word
+              </button>
+            )}
+            {canManage && (
+              <button data-testid="new-event-button" onClick={() => { setEditing(null); setFormOpen(true); }} className="inline-flex items-center gap-2 px-5 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors">
+                <Plus size={18} /> New event
+              </button>
+            )}
+          </div>
+        }
       />
       {loading ? (
         <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>
@@ -166,6 +257,7 @@ export const CalendarPanel = ({ canManage }) => {
 
       <EventDialog event={selected} open={!!selected} onClose={() => setSelected(null)} onChanged={load} />
       {canManage && <EventForm open={formOpen} onClose={() => setFormOpen(false)} onSaved={load} editing={editing} />}
+      {canManage && <ImportWordDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={load} />}
     </div>
   );
 };

@@ -24,6 +24,7 @@ export const NAV_ITEMS = [
   { label: "Parents", to: "/parents" },
   { label: "Volunteer", to: "/volunteer" },
   { label: "FAQ", to: "/faq" },
+  { label: "News", to: "/news" },
   { label: "Join", to: "/join" },
 ];
 
