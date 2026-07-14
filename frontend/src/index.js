@@ -21,3 +21,16 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// PWA: capture install prompt + register service worker
+window.__deferredPrompt = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  window.__deferredPrompt = e;
+  window.dispatchEvent(new Event("pwa-installable"));
+});
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

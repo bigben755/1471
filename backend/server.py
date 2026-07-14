@@ -7,6 +7,8 @@ load_dotenv(ROOT_DIR / '.env')
 import os
 import re
 import io
+import json
+import base64
 import logging
 import uuid
 import asyncio
@@ -356,6 +358,52 @@ async def send_enquiry_email(e: Enquiry) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Web Push (VAPID) — notifications + app icon badge on installed PWA
+# ---------------------------------------------------------------------------
+from pywebpush import webpush, WebPushException  # noqa: E402
+
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@1471horwich.org.uk")
+
+
+def _load_vapid_pem() -> Optional[str]:
+    b64 = os.environ.get("VAPID_PRIVATE_PEM_B64", "").strip()
+    if not b64:
+        return None
+    path = "/tmp/vapid_private.pem"
+    with open(path, "wb") as f:
+        f.write(base64.b64decode(b64))
+    return path
+
+
+VAPID_PEM_PATH = _load_vapid_pem()
+
+
+def _send_one_push(subscription: dict, payload: str) -> None:
+    webpush(subscription_info=subscription, data=payload,
+            vapid_private_key=VAPID_PEM_PATH, vapid_claims={"sub": VAPID_SUBJECT})
+
+
+async def push_to_user(user_id: str, title: str, body: str, url: str = "/portal") -> None:
+    if not VAPID_PEM_PATH:
+        return
+    subs = await db.push_subscriptions.find({"user_id": user_id}).to_list(20)
+    if not subs:
+        return
+    badge = await db.notifications.count_documents({"user_id": user_id, "read": False})
+    payload = json.dumps({"title": title, "body": (body or "")[:180], "url": url, "badge": badge})
+    for s in subs:
+        try:
+            await asyncio.to_thread(_send_one_push, s["subscription"], payload)
+        except WebPushException as exc:
+            code = getattr(getattr(exc, "response", None), "status_code", None)
+            if code in (404, 410):
+                await db.push_subscriptions.delete_one({"_id": s["_id"]})
+        except Exception as exc:  # pragma: no cover
+            logger.error("Push failed for %s: %s", user_id, exc)
+
+
+# ---------------------------------------------------------------------------
 # Recruitment eligibility + broadcast helpers
 # ---------------------------------------------------------------------------
 def _eligible_date_obj(e: dict):
@@ -525,6 +573,8 @@ async def deliver_broadcast(users: List[dict], title: str, body: str, channels: 
                          "read": False, "created_at": now_iso()})
     if docs:
         await db.notifications.insert_many(docs)
+        for d in docs:
+            await push_to_user(d["user_id"], title, d.get("body", ""), "/portal")
     return {"recipients": len(users), "dashboard_delivered": len(docs), "emails_sent": emails_sent,
             "email_configured": bool(EMERGENT_EMAIL_KEY)}
 
@@ -1187,6 +1237,9 @@ async def create_notice(payload: NoticeCreate, staff: dict = Depends(require_sta
               "created_at": now_iso()}
     await db.notices.insert_one(notice)
     notice.pop("_id", None)
+    recipients = await db.users.find({"role": {"$in": roles}}, {"id": 1}).to_list(5000)
+    for u in recipients:
+        await push_to_user(u["id"], f"Notice: {payload.title}", payload.body, "/portal")
     return {k: v for k, v in notice.items() if k != "_id"}
 
 
@@ -1512,6 +1565,47 @@ async def import_events(payload: EventsImport, staff: dict = Depends(require_sta
     return {"created": created}
 
 
+# ---------------------------------------------------------------------------
+# Push subscriptions
+# ---------------------------------------------------------------------------
+class PushSubscription(BaseModel):
+    subscription: dict
+    model_config = ConfigDict(extra="ignore")
+
+
+@api_router.get("/push/vapid-public-key")
+async def vapid_public_key():
+    return {"key": VAPID_PUBLIC_KEY, "enabled": bool(VAPID_PEM_PATH and VAPID_PUBLIC_KEY)}
+
+
+@api_router.post("/push/subscribe")
+async def push_subscribe(payload: PushSubscription, user: dict = Depends(get_current_user)):
+    endpoint = payload.subscription.get("endpoint")
+    if not endpoint:
+        raise HTTPException(status_code=400, detail="Invalid subscription")
+    await db.push_subscriptions.update_one(
+        {"endpoint": endpoint},
+        {"$set": {"endpoint": endpoint, "user_id": user["id"], "subscription": payload.subscription,
+                  "updated_at": now_iso()}},
+        upsert=True)
+    return {"subscribed": True}
+
+
+@api_router.post("/push/unsubscribe")
+async def push_unsubscribe(payload: PushSubscription, user: dict = Depends(get_current_user)):
+    endpoint = payload.subscription.get("endpoint")
+    if endpoint:
+        await db.push_subscriptions.delete_one({"endpoint": endpoint, "user_id": user["id"]})
+    return {"unsubscribed": True}
+
+
+@api_router.post("/push/test")
+async def push_test(user: dict = Depends(get_current_user)):
+    await push_to_user(user["id"], "1471 Horwich Squadron",
+                       "Notifications are working \u2014 you'll be alerted here.", "/portal")
+    return {"sent": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1575,6 +1669,7 @@ async def on_startup():
     await db.messages.create_index("member_id")
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.documents.create_index([("visible_roles", 1), ("created_at", -1)])
+    await db.push_subscriptions.create_index("endpoint", unique=True)
     await seed_users()
 
 

@@ -17,6 +17,7 @@ import { DocumentsPanel } from "./DocumentsPanel";
 import { MemberDocumentsPanel } from "./MemberDocumentsPanel";
 import { BlogAdminPanel } from "./BlogAdminPanel";
 import { MemberNewsPanel } from "./MemberNewsPanel";
+import { PwaManager } from "./PwaManager";
 import {
   CalendarDays, Award, Bell, MessageSquare, Users, Inbox, Settings, UserSearch, Megaphone, Mail, FolderOpen, Newspaper,
 } from "lucide-react";
@@ -65,8 +66,14 @@ export const Dashboard = () => {
   const [unread, setUnread] = useState(0);
 
   const loadUnread = useCallback(async () => {
-    try { const { data } = await api.get("/notifications/unread-count"); setUnread(data.count); }
-    catch { /* ignore */ }
+    try {
+      const { data } = await api.get("/notifications/unread-count");
+      setUnread(data.count);
+      if ("setAppBadge" in navigator) {
+        if (data.count > 0) navigator.setAppBadge(data.count);
+        else if (navigator.clearAppBadge) navigator.clearAppBadge();
+      }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -90,7 +97,7 @@ export const Dashboard = () => {
       case "documents": return isStaff ? <DocumentsPanel /> : <MemberDocumentsPanel />;
       case "news": return isStaff ? <BlogAdminPanel /> : <MemberNewsPanel />;
       case "enquiries": return <EnquiriesPanel />;
-      case "inbox": return <NotificationsPanel onRead={() => setUnread(0)} />;
+      case "inbox": return <NotificationsPanel onRead={() => { setUnread(0); if (navigator.clearAppBadge) navigator.clearAppBadge(); }} />;
       case "account": return <AccountPanel />;
       default: return null;
     }
@@ -98,6 +105,7 @@ export const Dashboard = () => {
 
   return (
     <PortalShell tabs={tabsWithBadge} active={active} onTab={setActive}>
+      <PwaManager />
       {render()}
     </PortalShell>
   );
