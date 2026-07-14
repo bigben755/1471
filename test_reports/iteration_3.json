@@ -1,0 +1,45 @@
+{
+  "summary": "Full backend + frontend verification of Phase 2 features: (1) prospective-cadet eligibility on public Join form, (2) staff Recruitment tracker (now/september/future buckets), (3) staff Comms broadcast to roles + parent-of-cadet, (4) staff Newsletter create/preview/save/send, (5) member Inbox with unread badge that clears on open. All three demo roles (admin/cadet/parent) exercised end-to-end. New pytest file adds 13 tests, all green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/enquiries, /api/broadcast, /api/newsletters, /api/newsletters/{id}/send", "issue": "Returns 200 instead of 201 on resource creation (REST convention, non-blocking)"},
+      {"endpoint": "GET /api/enquiries/tracker", "issue": "Filter `{age_band: {$ne: null}}` returns enquiries even when age_band is an empty string; not observed but if a client submits age_band='' the enquiry will be scanned then discarded (harmless)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "CommsPanel newsletter list", "issues": ["When a newsletter status is 'sent', the meta line uses n.result.recipients but shows 'Sent to 1 - 14/07/2026' - reads oddly; consider 'Sent to 1 recipient(s) on 14/07/2026'."]},
+      {"screen": "Join form Prospective cadet details", "issues": ["<input type='date'> uses the browser default picker; other date pickers in the portal use shadcn Calendar. Consider unifying to shadcn Calendar for consistency."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase2.py",
+    "/app/backend/tests/test_portal.py",
+    "/app/backend/tests/test_backend.py",
+    "/app/test_reports/pytest/pytest_phase2.xml"
+  ],
+  "action_items": [
+    "Nothing blocking. Optional polish: (a) return 201 from all POST creators, (b) unify date pickers to shadcn Calendar on Join form for consistency with the portal, (c) improve 'Sent to N - dd/mm/yyyy' wording in newsletter list."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 991 lines - crossing the 700-line guideline. Split into routers (auth / users / events / notices / messages / enquiries / broadcast / newsletters) before it grows further.",
+    "NotificationsPanel.load auto-calls /notifications/read-all every time the panel mounts; if a user navigates away before the request settles the badge on the tab can flicker back. Behaviour observed to work but consider deferring the mark-read call until the list is scrolled/viewed for parity with typical inbox UX.",
+    "resolve_recipients() returns all users when audience.mode is unknown (falls through to `return []` — good). However Audience.model in server has no strict enum on mode; consider Literal['all','roles','users','parent_of'] for defence in depth.",
+    "compute_eligibility() for yr7_starting_yr8 uses the enquiry's created_at year to decide whether September has passed this cycle - correct, but the bucket switches automatically on 1 Sept. Add a unit test guard so the intent is clear.",
+    "Email channel path in deliver_broadcast() awaits send_email() sequentially per recipient. Fine for a squadron-sized list; for larger sends use asyncio.gather with a semaphore."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase2.py (new - 13 pytest cases for Phase 2)",
+    "/app/test_reports/pytest/pytest_phase2.xml (junit output)"
+  ],
+  "success_rate": {"backend": "100% (13/13 Phase 2 pytest)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471!, cfav@1471horwich.org.uk / Cfav1471!, cadet@1471horwich.org.uk / Cadet1471!, parent@1471horwich.org.uk / Parent1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "TEST_-prefixed enquiries (yr8, 13_plus, yr7, under_12, adult volunteer) and one TEST_UI Sam yr8 UI enquiry were created and then cleaned up. TEST_Phase2 Newsletter was created, sent, and deleted. TEST_UI Broadcasts + a real newsletter 'June Squadron Update' were sent to the demo cadet & parent; their inbox now contains those items - this is expected and does not affect production data. Notification acks state for cadet/parent has been advanced (existing behaviour from prior iteration).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Three backend pytest files exist: test_backend.py (public + enquiries), test_portal.py (portal roles), test_phase2.py (recruitment tracker, broadcast, notifications, newsletters). Run: `REACT_APP_BACKEND_URL=https://raf-horwich.preview.emergentagent.com pytest backend/tests/ -v`. The demo cadet+parent inboxes contain seeded/test notifications from prior runs; that's fine, filter by title/marker or purge via db.notifications if you need a clean slate. Newsletter 'June Squadron Update' (status=sent) is a seeded demo item - do NOT delete. All new interactive elements have data-testid attributes exactly as documented in the review request (bucket-now / bucket-september / bucket-future / prospect-create-<id> / broadcast-title / broadcast-body / recipient-mode-* / recipient-role-* / recipient-cadet-select / channel-dashboard / channel-email / broadcast-send / new-newsletter / nl-subject / nl-heading / nl-intro / nl-body / nl-preview-btn / nl-save-btn / newsletter-send-<id> / newsletter-confirm-send / notifications-list / notification-<id> / tab-inbox / tab-recruitment / tab-comms).",
+  "rca of the issue": "No blocking issues found - all three Phase 2 features work end-to-end. Only observation was a Playwright script false-start where I used enquiry-option 'Become an Adult Volunteer' whereas the UI enum uses 'Adult Volunteer Enquiry'. This is documented in memory for the next tester."
+}

@@ -343,6 +343,13 @@ export const ENQUIRY_TYPES = [
   "General Enquiry",
 ];
 
+export const AGE_BANDS = [
+  { value: "yr8", label: "12 and in Year 8" },
+  { value: "yr7_starting_yr8", label: "12 and in Year 7, starting Year 8 in September" },
+  { value: "13_plus", label: "13 and over" },
+  { value: "under_12", label: "12 and under (not yet in Year 8)" },
+];
+
 export const FAQS = [
   { q: "What age can you join Air Cadets?", a: "Young people can join the Royal Air Force Air Cadets from around 12 years old (school year 8) and may continue as a cadet up to the age of 20, in line with national RAFAC policy. At 1471 Horwich Squadron we welcome enquiries from young people aged 12 to 17." },
   { q: "Do you need aviation experience to join?", a: "No. You do not need any military experience, aviation knowledge or previous qualifications. You just need a willingness to get involved, learn and take part." },

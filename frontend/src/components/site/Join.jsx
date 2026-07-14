@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
-import { JOIN_PATHWAYS, ENQUIRY_TYPES } from "../../data/content";
+import { JOIN_PATHWAYS, ENQUIRY_TYPES, AGE_BANDS } from "../../data/content";
 import { Reveal, SectionHeading } from "./Reveal";
 import { Loader2, Send, ShieldCheck } from "lucide-react";
 import {
@@ -14,6 +14,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const emptyForm = {
   name: "", email: "", phone: "",
   enquiry_type: "Join as a Cadet", message: "", consent: false,
+  dob: "", age_band: "",
 };
 
 export const Join = () => {
@@ -21,6 +22,7 @@ export const Join = () => {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
+  const isCadet = form.enquiry_type === "Join as a Cadet";
 
   useEffect(() => {
     const preset = location.state?.enquiryType;
@@ -37,6 +39,10 @@ export const Join = () => {
     if (form.name.trim().length < 2) er.name = "Please enter your name.";
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email)) er.email = "Enter a valid email address.";
     if (form.message.trim().length < 5) er.message = "Please add a short message.";
+    if (isCadet) {
+      if (!form.dob) er.dob = "Please enter the prospective cadet's date of birth.";
+      if (!form.age_band) er.age_band = "Please select the option that applies.";
+    }
     if (!form.consent) er.consent = "Please tick the consent box to continue.";
     setErrors(er);
     return Object.keys(er).length === 0;
@@ -47,7 +53,9 @@ export const Join = () => {
     if (!validate()) return;
     setSubmitting(true);
     try {
-      await axios.post(`${API}/enquiries`, form);
+      const payload = { ...form };
+      if (!isCadet) { payload.dob = null; payload.age_band = null; }
+      await axios.post(`${API}/enquiries`, payload);
       toast.success("Thank you \u2014 your enquiry has been sent.", {
         description: "A member of the squadron team will be in touch.",
       });
@@ -177,6 +185,49 @@ export const Join = () => {
               />
               {errors.message && <p data-testid="error-message" className="text-raf-red text-xs mt-1">{errors.message}</p>}
             </div>
+
+            {isCadet && (
+              <div data-testid="cadet-eligibility-block" className="mt-6 bg-raf-sky/40 border border-raf-sky p-5">
+                <p className="text-sm font-semibold text-raf-navy">Prospective cadet details</p>
+                <p className="text-xs text-raf-slate mt-1 mb-4">This helps us tell you when the young person can join. Cadets can normally start from Year 8 (age 12).</p>
+                <div className="grid sm:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-raf-navy mb-2">Date of birth</label>
+                    <input
+                      data-testid="form-dob"
+                      type="date"
+                      value={form.dob}
+                      onChange={(e) => field("dob", e.target.value)}
+                      max={new Date().toISOString().split("T")[0]}
+                      className="w-full border border-raf-sky px-4 py-3 outline-none focus:border-raf-blue focus:ring-1 focus:ring-raf-blue bg-white"
+                    />
+                    {errors.dob && <p data-testid="error-dob" className="text-raf-red text-xs mt-1">{errors.dob}</p>}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-semibold text-raf-navy mb-2">Which best describes the young person?</label>
+                  <div className="space-y-2">
+                    {AGE_BANDS.map((b) => (
+                      <label
+                        key={b.value}
+                        data-testid={`age-band-${b.value}`}
+                        className={`flex items-start gap-3 p-3 border cursor-pointer transition-colors ${form.age_band === b.value ? "bg-white border-raf-blue" : "bg-white/60 border-raf-sky hover:border-raf-blue"}`}
+                      >
+                        <input
+                          type="radio"
+                          name="age_band"
+                          checked={form.age_band === b.value}
+                          onChange={() => field("age_band", b.value)}
+                          className="mt-0.5 w-4 h-4 accent-raf-blue"
+                        />
+                        <span className="text-sm text-raf-slate leading-snug">{b.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {errors.age_band && <p data-testid="error-age-band" className="text-raf-red text-xs mt-1">{errors.age_band}</p>}
+                </div>
+              </div>
+            )}
 
             <label className="mt-5 flex items-start gap-3 cursor-pointer">
               <input

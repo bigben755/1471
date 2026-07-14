@@ -8,11 +8,12 @@ import os
 import logging
 import uuid
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import List, Optional
 
 import jwt
 import bcrypt
+import httpx
 from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
@@ -38,6 +39,18 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 NOTIFY_EMAIL = os.environ.get('NOTIFY_EMAIL', ADMIN_EMAIL)
+
+# Emergent managed email proxy (constant — never read base URL from env)
+EMAIL_BASE_URL = "https://integrations.emergentagent.com"
+EMERGENT_EMAIL_KEY = os.environ.get('EMERGENT_EMAIL_KEY', '').strip()
+EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', '1471 Horwich Squadron')
+
+AGE_BANDS = {
+    "under_12": "12 and under",
+    "yr7_starting_yr8": "In Year 7, starting Year 8 in September",
+    "yr8": "12 and in Year 8",
+    "13_plus": "13 and over",
+}
 
 STAFF_ROLES = {"admin", "cfav"}
 ALL_ROLES = {"admin", "cfav", "cadet", "parent"}
@@ -166,6 +179,8 @@ class EnquiryCreate(BaseModel):
     enquiry_type: str
     message: str = Field(..., min_length=5, max_length=4000)
     consent: bool
+    dob: Optional[str] = None
+    age_band: Optional[str] = None
     model_config = ConfigDict(extra="ignore")
 
 
@@ -177,6 +192,8 @@ class Enquiry(BaseModel):
     enquiry_type: str
     message: str
     consent: bool
+    dob: Optional[str] = None
+    age_band: Optional[str] = None
     status: str = "new"
     created_at: str = Field(default_factory=now_iso)
 
@@ -226,39 +243,176 @@ class MessageCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=4000)
 
 
+class Audience(BaseModel):
+    mode: str = "all"  # all | roles | users | parent_of
+    roles: List[str] = []
+    user_ids: List[str] = []
+    cadet_id: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
+
+
+class BroadcastCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    body: str = Field(..., min_length=1, max_length=8000)
+    audience: Audience = Field(default_factory=Audience)
+    channels: List[str] = ["dashboard"]
+    model_config = ConfigDict(extra="ignore")
+
+
+class NewsletterCreate(BaseModel):
+    subject: str = Field(..., min_length=2, max_length=200)
+    heading: str = Field(default="", max_length=200)
+    intro: str = Field(default="", max_length=4000)
+    body: str = Field(..., min_length=1, max_length=20000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class NewsletterSend(BaseModel):
+    audience: Audience = Field(default_factory=Audience)
+    channels: List[str] = ["dashboard", "email"]
+    model_config = ConfigDict(extra="ignore")
+
+
 # ---------------------------------------------------------------------------
-# Email (enquiries)
+# Email (Emergent managed email proxy)
 # ---------------------------------------------------------------------------
-def _enquiry_email_html(e: Enquiry) -> str:
+def _email_shell(title: str, inner: str) -> str:
     return f"""
-    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,sans-serif;background:#EAF5F8;padding:24px;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif;background:#EAF5F8;padding:24px;">
       <tr><td align="center"><table width="600" style="background:#fff;border:1px solid #d6e6ec;">
-        <tr><td style="background:#002F5F;padding:20px 28px;color:#fff;font-size:18px;font-weight:bold;">1471 Horwich Squadron &mdash; New Website Enquiry</td></tr>
+        <tr><td style="background:#002F5F;padding:20px 28px;color:#fff;font-size:18px;font-weight:bold;">1471 Horwich Squadron RAF Air Cadets</td></tr>
         <tr><td style="height:4px;background:#C60C30;"></td></tr>
         <tr><td style="padding:28px;color:#071A2F;font-size:15px;line-height:1.6;">
-          <p><strong>Type:</strong> {e.enquiry_type}</p>
-          <p><strong>Name:</strong> {e.name}</p>
-          <p><strong>Email:</strong> {e.email}</p>
-          <p><strong>Phone:</strong> {e.phone or '&ndash;'}</p>
-          <p><strong>Message:</strong></p>
-          <p style="padding:14px;background:#EAF5F8;border-left:3px solid #002F5F;">{e.message}</p>
+          <h2 style="margin:0 0 14px;color:#002F5F;font-size:20px;">{title}</h2>
+          {inner}
         </td></tr>
+        <tr><td style="padding:16px 28px;background:#F3F8FA;color:#5b6b78;font-size:12px;">1471 Horwich Squadron RAF Air Cadets &middot; This message was sent from the Squadron members area.</td></tr>
       </table></td></tr></table>"""
 
 
-async def send_enquiry_email(e: Enquiry) -> None:
-    if not RESEND_API_KEY or resend is None:
-        logger.info("Resend not configured; enquiry stored only (id=%s)", e.id)
-        return
+def _enquiry_email_html(e: Enquiry) -> str:
+    band = AGE_BANDS.get(e.age_band or "", "")
+    extra = ""
+    if e.dob or band:
+        extra = f"""<p><strong>Date of birth:</strong> {e.dob or '&ndash;'}</p>
+          <p><strong>Age band:</strong> {band or '&ndash;'}</p>"""
+    inner = f"""
+      <p><strong>Type:</strong> {e.enquiry_type}</p>
+      <p><strong>Name:</strong> {e.name}</p>
+      <p><strong>Email:</strong> {e.email}</p>
+      <p><strong>Phone:</strong> {e.phone or '&ndash;'}</p>
+      {extra}
+      <p><strong>Message:</strong></p>
+      <p style="padding:14px;background:#EAF5F8;border-left:3px solid #002F5F;">{e.message}</p>"""
+    return _email_shell("New website enquiry", inner)
+
+
+def _text_to_html(text: str) -> str:
+    safe = (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    paras = [p.strip() for p in safe.split("\n\n") if p.strip()]
+    return "".join(f'<p style="margin:0 0 12px;">{p.replace(chr(10), "<br/>")}</p>' for p in paras)
+
+
+def _broadcast_email_html(title: str, body: str, from_name: str) -> str:
+    inner = _text_to_html(body) + f'<p style="margin-top:20px;color:#5b6b78;font-size:13px;">&mdash; {from_name}</p>'
+    return _email_shell(title, inner)
+
+
+def _newsletter_email_html(nl: dict) -> str:
+    parts = []
+    if nl.get("intro"):
+        parts.append(f'<p style="font-size:16px;color:#334;">{_text_to_html(nl["intro"])}</p>')
+    parts.append(_text_to_html(nl.get("body", "")))
+    return _email_shell(nl.get("heading") or nl.get("subject", "Squadron newsletter"), "".join(parts))
+
+
+async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] = None) -> str:
+    """Send one email via the managed proxy. Returns 'sent' | 'skipped' | 'failed'."""
+    if not EMERGENT_EMAIL_KEY:
+        logger.info("Email not configured; skipped send to %s", to)
+        return "skipped"
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    if reply_to:
+        payload["contact_email"] = reply_to
     try:
-        resend.api_key = RESEND_API_KEY
-        await asyncio.to_thread(resend.Emails.send, {
-            "from": SENDER_EMAIL, "to": [NOTIFY_EMAIL],
-            "subject": f"New {e.enquiry_type} enquiry - {e.name}",
-            "html": _enquiry_email_html(e), "reply_to": e.email,
-        })
+        async with httpx.AsyncClient(timeout=30) as c:
+            resp = await c.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
+                                headers={"X-Email-Key": EMERGENT_EMAIL_KEY}, json=payload)
+        resp.raise_for_status()
+        return "sent"
     except Exception as exc:  # pragma: no cover
-        logger.error("Failed to send enquiry email: %s", exc)
+        logger.error("Email send failed to %s: %s", to, exc)
+        return "failed"
+
+
+async def send_enquiry_email(e: Enquiry) -> None:
+    await send_email(NOTIFY_EMAIL, f"New {e.enquiry_type} enquiry - {e.name}",
+                     _enquiry_email_html(e), reply_to=e.email)
+
+
+# ---------------------------------------------------------------------------
+# Recruitment eligibility + broadcast helpers
+# ---------------------------------------------------------------------------
+def compute_eligibility(e: dict) -> Optional[str]:
+    """Map a cadet enquiry's age band into now | september | future."""
+    band = e.get("age_band")
+    if band in ("yr8", "13_plus"):
+        return "now"
+    if band == "under_12":
+        return "future"
+    if band == "yr7_starting_yr8":
+        try:
+            cd = datetime.fromisoformat(e.get("created_at", "")).date()
+        except Exception:
+            cd = date.today()
+        sept = date(cd.year, 9, 1)
+        if cd > sept:
+            sept = date(cd.year + 1, 9, 1)
+        return "now" if date.today() >= sept else "september"
+    return None
+
+
+async def resolve_recipients(a: Audience) -> List[dict]:
+    if a.mode == "all":
+        q = {}
+    elif a.mode == "roles":
+        roles = [r for r in a.roles if r in ALL_ROLES]
+        if not roles:
+            return []
+        q = {"role": {"$in": roles}}
+    elif a.mode == "users":
+        if not a.user_ids:
+            return []
+        q = {"id": {"$in": a.user_ids}}
+    elif a.mode == "parent_of":
+        if not a.cadet_id:
+            return []
+        q = {"role": "parent", "child_ids": a.cadet_id}
+    else:
+        return []
+    return await db.users.find(q, {"_id": 0, "password_hash": 0}).to_list(5000)
+
+
+async def deliver_broadcast(users: List[dict], title: str, body: str, channels: List[str],
+                            from_name: str, kind: str, email_html: Optional[str] = None) -> dict:
+    channels = [c for c in channels if c in ("dashboard", "email")] or ["dashboard"]
+    docs, emails_sent = [], 0
+    for u in users:
+        email_status = "n/a"
+        if "email" in channels and u.get("email"):
+            html = email_html or _broadcast_email_html(title, body, from_name)
+            email_status = await send_email(u["email"], title, html)
+            if email_status == "sent":
+                emails_sent += 1
+        if "dashboard" in channels:
+            docs.append({"id": str(uuid.uuid4()), "user_id": u["id"], "title": title,
+                         "body": body, "from_name": from_name, "kind": kind,
+                         "channels": channels, "email_status": email_status,
+                         "read": False, "created_at": now_iso()})
+    if docs:
+        await db.notifications.insert_many(docs)
+    return {"recipients": len(users), "dashboard_delivered": len(docs), "emails_sent": emails_sent,
+            "email_configured": bool(EMERGENT_EMAIL_KEY)}
 
 
 # ---------------------------------------------------------------------------
@@ -309,9 +463,32 @@ async def create_enquiry(payload: EnquiryCreate):
     return enquiry
 
 
-@api_router.get("/enquiries", response_model=List[Enquiry])
+def _enquiry_out(e: dict) -> dict:
+    e = {k: v for k, v in e.items() if k != "_id"}
+    e["eligibility"] = compute_eligibility(e)
+    e["age_band_label"] = AGE_BANDS.get(e.get("age_band") or "", "")
+    return e
+
+
+@api_router.get("/enquiries")
 async def list_enquiries(staff: dict = Depends(require_staff)):
-    return await db.enquiries.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    rows = await db.enquiries.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [_enquiry_out(e) for e in rows]
+
+
+@api_router.get("/enquiries/tracker")
+async def enquiries_tracker(staff: dict = Depends(require_staff)):
+    """Prospective-cadet enquiries grouped by joining eligibility."""
+    rows = await db.enquiries.find({"age_band": {"$ne": None}}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    buckets = {"now": [], "september": [], "future": []}
+    for e in rows:
+        out = _enquiry_out(e)
+        if out["eligibility"] in buckets:
+            buckets[out["eligibility"]].append(out)
+    return {"buckets": buckets,
+            "counts": {k: len(v) for k, v in buckets.items()},
+            "labels": {"now": "Can join now", "september": "Eligible in September",
+                       "future": "Eligible in the future"}}
 
 
 @api_router.patch("/enquiries/{enquiry_id}", response_model=Enquiry)
@@ -637,6 +814,113 @@ async def staff_reply(member_id: str, payload: MessageCreate, staff: dict = Depe
     return {k: v for k, v in msg.items() if k != "_id"}
 
 
+# ---------------------------------------------------------------------------
+# Broadcast messages / notifications (staff -> targeted members)
+# ---------------------------------------------------------------------------
+@api_router.post("/broadcast")
+async def create_broadcast(payload: BroadcastCreate, staff: dict = Depends(require_staff)):
+    users = await resolve_recipients(payload.audience)
+    if not users:
+        raise HTTPException(status_code=400, detail="No recipients match this audience")
+    from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
+    result = await deliver_broadcast(users, payload.title, payload.body, payload.channels, from_name, "message")
+    await db.broadcasts.insert_one({
+        "id": str(uuid.uuid4()), "title": payload.title, "body": payload.body,
+        "channels": result and payload.channels, "audience": payload.audience.model_dump(),
+        "sent_by": from_name, "created_at": now_iso(), "result": result})
+    return result
+
+
+@api_router.get("/notifications")
+async def my_notifications(user: dict = Depends(get_current_user)):
+    return await db.notifications.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api_router.get("/notifications/unread-count")
+async def unread_count(user: dict = Depends(get_current_user)):
+    n = await db.notifications.count_documents({"user_id": user["id"], "read": False})
+    return {"count": n}
+
+
+@api_router.post("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str, user: dict = Depends(get_current_user)):
+    await db.notifications.update_one({"id": notification_id, "user_id": user["id"]},
+                                      {"$set": {"read": True}})
+    return {"read": True}
+
+
+@api_router.post("/notifications/read-all")
+async def mark_all_read(user: dict = Depends(get_current_user)):
+    await db.notifications.update_many({"user_id": user["id"], "read": False},
+                                       {"$set": {"read": True}})
+    return {"read": True}
+
+
+# ---------------------------------------------------------------------------
+# Newsletters (staff compose + preview + send)
+# ---------------------------------------------------------------------------
+def _newsletter_out(n: dict) -> dict:
+    return {k: v for k, v in n.items() if k != "_id"}
+
+
+@api_router.get("/newsletters")
+async def list_newsletters(staff: dict = Depends(require_staff)):
+    rows = await db.newsletters.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return rows
+
+
+@api_router.post("/newsletters")
+async def create_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_staff)):
+    nl = {"id": str(uuid.uuid4()), **payload.model_dump(), "status": "draft",
+          "created_by": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Staff",
+          "created_at": now_iso(), "sent_at": None, "result": None}
+    await db.newsletters.insert_one(nl)
+    return _newsletter_out(nl)
+
+
+@api_router.patch("/newsletters/{newsletter_id}")
+async def update_newsletter(newsletter_id: str, payload: NewsletterCreate, staff: dict = Depends(require_staff)):
+    n = await db.newsletters.find_one_and_update(
+        {"id": newsletter_id}, {"$set": payload.model_dump()},
+        projection={"_id": 0}, return_document=True)
+    if not n:
+        raise HTTPException(status_code=404, detail="Newsletter not found")
+    return n
+
+
+@api_router.delete("/newsletters/{newsletter_id}")
+async def delete_newsletter(newsletter_id: str, staff: dict = Depends(require_staff)):
+    res = await db.newsletters.delete_one({"id": newsletter_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Newsletter not found")
+    return {"deleted": True}
+
+
+@api_router.post("/newsletters/preview")
+async def preview_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_staff)):
+    return {"html": _newsletter_email_html(payload.model_dump())}
+
+
+@api_router.post("/newsletters/{newsletter_id}/send")
+async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: dict = Depends(require_staff)):
+    nl = await db.newsletters.find_one({"id": newsletter_id}, {"_id": 0})
+    if not nl:
+        raise HTTPException(status_code=404, detail="Newsletter not found")
+    users = await resolve_recipients(payload.audience)
+    if not users:
+        raise HTTPException(status_code=400, detail="No recipients match this audience")
+    from_name = nl.get("created_by") or "Squadron Staff"
+    dash_body = (nl.get("intro", "") + ("\n\n" if nl.get("intro") else "") + nl.get("body", "")).strip()
+    email_html = _newsletter_email_html(nl)
+    result = await deliver_broadcast(users, nl["subject"], dash_body, payload.channels,
+                                     from_name, "newsletter", email_html=email_html)
+    await db.newsletters.update_one({"id": newsletter_id},
+                                    {"$set": {"status": "sent", "sent_at": now_iso(),
+                                              "audience": payload.audience.model_dump(),
+                                              "channels": payload.channels, "result": result}})
+    return result
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -698,6 +982,7 @@ async def on_startup():
     await db.events.create_index("start")
     await db.notice_acks.create_index([("notice_id", 1), ("user_id", 1)], unique=True)
     await db.messages.create_index("member_id")
+    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await seed_users()
 
 
