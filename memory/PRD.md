@@ -71,3 +71,20 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - Activities listing cards now show photo thumbnails; ActivityDetailPage has photo hero + responsive gallery grid with click-to-open lightbox. Hero + Cadets section backgrounds and About/Parents feature images now use real squadron photos.
 - Verified: all images serve HTTP 200 image/jpeg over the public URL; pages render correctly (screenshots).
 
+---
+
+# Phase 2 — Recruitment, Comms & Newsletter — 2026-06-20
+
+## Delivered & tested (testing agent iteration_3: 100% backend 13/13 + 100% frontend flows)
+- **Prospective-cadet eligibility stream:** Public Join form now captures Date of Birth + an age-band radio (only for 'Join as a Cadet'). Bands: yr8 & 13_plus → "Can join now"; yr7_starting_yr8 → "Eligible in September" (auto-moves to "now" once 1 Sept passes, via compute_eligibility); under_12 → "Eligible in the future".
+- **Staff Recruitment tracker** (`/portal` → Recruitment tab): three buckets with counts + prospect cards (contact details, DoB, age band) + "Create cadet account" action. Endpoint GET /api/enquiries/tracker.
+- **Targeted broadcast/notifications** (Comms tab → Send message): recipient picker (everyone / by role / specific people / a cadet's parent) + channels (dashboard + email). POST /api/broadcast → writes db.notifications + emails. Members see them in a new **Inbox** tab with an unread badge (auto-marks read on open). Endpoints: /api/notifications (+ unread-count, /{id}/read, /read-all).
+- **Newsletter builder** (Comms tab → Newsletter): compose (subject/heading/intro/body), server-rendered email **Preview** (iframe), save drafts, then **Send** to selected audience + channels. Newsletters CRUD + /preview + /{id}/send.
+- **Email is LIVE** via the Emergent managed email proxy (EMERGENT_EMAIL_KEY in backend/.env, EMAIL_FROM_NAME="1471 Horwich Squadron"). No Resend key required. Enquiry notification emails also route through this now. Degrades gracefully (logs+skips) if the key is ever removed.
+
+## Phase 2 backlog / tech debt
+- P1: Event photo galleries (object storage); parents view photos.
+- P1: Blogs (in-app) + Facebook auto-post (needs Meta Page token).
+- P2: Word (.docx) training-programme import → calendar events.
+- P2 (tech debt from iteration_3 review): split server.py (~991 lines) into routers; return 201 from POST creators; tighten Audience.mode to a Literal enum; add unit test for the September auto-move; consider asyncio.gather+semaphore for large email sends; optional shadcn Calendar on the Join DoB field.
+

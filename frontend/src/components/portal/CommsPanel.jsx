@@ -146,7 +146,7 @@ const NewsletterMode = ({ users }) => {
                   <span className={`text-[10px] uppercase px-2 py-0.5 ${n.status === "sent" ? "bg-emerald-600 text-white" : "bg-raf-sky text-raf-blue"}`}>{n.status}</span>
                 </div>
                 <div className="text-xs text-raf-slate mt-1">
-                  {n.status === "sent" && n.result ? `Sent to ${n.result.recipients} · ${new Date(n.sent_at).toLocaleDateString("en-GB")}` : `Draft · ${new Date(n.created_at).toLocaleDateString("en-GB")}`}
+                  {n.status === "sent" && n.result ? `Sent to ${n.result.recipients} recipient(s) on ${new Date(n.sent_at).toLocaleDateString("en-GB")}` : `Draft · ${new Date(n.created_at).toLocaleDateString("en-GB")}`}
                 </div>
               </div>
               <div className="flex items-center gap-2">
