@@ -372,6 +372,100 @@ def compute_eligibility(e: dict) -> Optional[str]:
     return None
 
 
+def eligible_date(e: dict) -> Optional[str]:
+    """Best-estimate date a prospective cadet can join (ISO date)."""
+    elig = compute_eligibility(e)
+    if elig == "now":
+        return date.today().isoformat()
+    if elig == "september":
+        try:
+            cd = datetime.fromisoformat(e.get("created_at", "")).date()
+        except Exception:
+            cd = date.today()
+        sept = date(cd.year, 9, 1)
+        if cd > sept:
+            sept = date(cd.year + 1, 9, 1)
+        if sept < date.today():
+            sept = date(date.today().year, 9, 1)
+        return sept.isoformat()
+    if elig == "future":
+        dob = e.get("dob")
+        if not dob:
+            return None
+        try:
+            d = datetime.fromisoformat(dob).date()
+        except Exception:
+            try:
+                d = datetime.strptime(dob, "%Y-%m-%d").date()
+            except Exception:
+                return None
+        # England school-year rule: Year 8 starts the September of birth_year + (12 if born Sep-Dec else 11)
+        yr = d.year + (12 if d.month >= 9 else 11)
+        return date(yr, 9, 1).isoformat()
+    return None
+
+
+def countdown_text(target_iso: str) -> str:
+    target = date.fromisoformat(target_iso)
+    days = (target - date.today()).days
+    if days <= 0:
+        return "you can join us now"
+    months, rem = days // 30, days % 30
+    if months >= 1:
+        out = f"about {months} month{'s' if months != 1 else ''}"
+        if rem:
+            out += f" and {rem} day{'s' if rem != 1 else ''}"
+        return out
+    return f"{days} day{'s' if days != 1 else ''}"
+
+
+def _joining_instructions_html(name: str, note: str = "") -> str:
+    note_html = f'<p style="padding:12px;background:#EAF5F8;border-left:3px solid #002F5F;">{note}</p>' if note else ""
+    inner = f"""
+      <p>Hi {name},</p>
+      <p>Great news &mdash; you&rsquo;re old enough to join 1471 Horwich Squadron RAF Air Cadets, and we&rsquo;d love to welcome you along.</p>
+      {note_html}
+      <p><strong>When we parade</strong><br/>Monday &amp; Thursday evenings, 19:00&ndash;21:30.</p>
+      <p><strong>Where</strong><br/>1471 (Horwich) ATC Sqn HQ, St Joseph&rsquo;s Secondary School &amp; Sports College, Chorley New Road, Horwich, BL6 6HW.</p>
+      <p><strong>What to do next</strong><br/>Come along on a parade night with a parent or carer, in comfortable clothing. You don&rsquo;t need any experience or kit. Please reply to this email to let us know which evening you&rsquo;ll visit so we can look out for you.</p>
+      <p>We look forward to meeting you!</p>
+      <p>1471 Horwich Squadron staff team</p>"""
+    return _email_shell("You can join us &mdash; here&rsquo;s how", inner)
+
+
+def _countdown_html(name: str, target_iso: str, note: str = "") -> str:
+    when = date.fromisoformat(target_iso).strftime("%d %B %Y").lstrip("0")
+    note_html = f'<p style="padding:12px;background:#EAF5F8;border-left:3px solid #002F5F;">{note}</p>' if note else ""
+    inner = f"""
+      <p>Hi {name},</p>
+      <p>Thanks for your interest in joining 1471 Horwich Squadron RAF Air Cadets!</p>
+      <p>You&rsquo;re not quite old enough to join just yet &mdash; cadets can normally start from Year 8 (age 12). Based on the details you gave us, you&rsquo;ll be able to join us from <strong>{when}</strong>.</p>
+      <p style="font-size:18px;color:#C60C30;font-weight:bold;">That&rsquo;s {countdown_text(target_iso)} to go!</p>
+      {note_html}
+      <p>We&rsquo;ll be in touch nearer the time. In the meantime, follow us on Facebook to see what our cadets get up to.</p>
+      <p>See you soon,<br/>1471 Horwich Squadron staff team</p>"""
+    return _email_shell("Not long to go until you can join!", inner)
+
+
+async def send_recruit_email(e: dict, kind: Optional[str], note: str) -> dict:
+    first = (e.get("name", "there").strip().split(" ") or ["there"])[0]
+    elig = compute_eligibility(e)
+    k = kind or ("joining" if elig == "now" else "countdown")
+    if k == "joining":
+        status = await send_email(e["email"], "Joining 1471 Horwich Squadron \u2014 here's how",
+                                  _joining_instructions_html(first, note), reply_to=NOTIFY_EMAIL)
+        target = None
+    else:
+        target = eligible_date(e)
+        if not target:
+            return {"sent": False, "error": "no_date"}
+        status = await send_email(e["email"], "Not long until you can join 1471 Horwich Squadron!",
+                                  _countdown_html(first, target, note), reply_to=NOTIFY_EMAIL)
+    await db.enquiries.update_one({"id": e["id"]}, {"$set": {
+        "status": "actioned", "last_recruit_email": {"kind": k, "at": now_iso(), "status": status}}})
+    return {"sent": status in ("sent", "skipped"), "email_status": status, "kind": k, "eligible_date": target}
+
+
 async def resolve_recipients(a: Audience) -> List[dict]:
     if a.mode == "all":
         q = {}
@@ -467,6 +561,7 @@ def _enquiry_out(e: dict) -> dict:
     e = {k: v for k, v in e.items() if k != "_id"}
     e["eligibility"] = compute_eligibility(e)
     e["age_band_label"] = AGE_BANDS.get(e.get("age_band") or "", "")
+    e["eligible_date"] = eligible_date(e)
     return e
 
 
@@ -509,6 +604,47 @@ async def delete_enquiry(enquiry_id: str, staff: dict = Depends(require_staff)):
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Enquiry not found")
     return {"deleted": True}
+
+
+class RecruitEmail(BaseModel):
+    kind: Optional[str] = None  # joining | countdown
+    note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class RecruitBulk(BaseModel):
+    eligibility: str
+    note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(extra="ignore")
+
+
+@api_router.post("/enquiries/recruit-email/bulk")
+async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require_staff)):
+    if payload.eligibility not in ("now", "september", "future"):
+        raise HTTPException(status_code=400, detail="Invalid eligibility group")
+    rows = await db.enquiries.find({"age_band": {"$ne": None}}, {"_id": 0}).to_list(2000)
+    sent, skipped = 0, 0
+    for e in rows:
+        if compute_eligibility(e) == payload.eligibility:
+            res = await send_recruit_email(e, None, payload.note)
+            if res.get("sent"):
+                sent += 1
+            else:
+                skipped += 1
+    return {"sent": sent, "skipped": skipped,
+            "kind": "joining" if payload.eligibility == "now" else "countdown"}
+
+
+@api_router.post("/enquiries/{enquiry_id}/recruit-email")
+async def recruit_email(enquiry_id: str, payload: RecruitEmail, staff: dict = Depends(require_staff)):
+    e = await db.enquiries.find_one({"id": enquiry_id}, {"_id": 0})
+    if not e:
+        raise HTTPException(status_code=404, detail="Enquiry not found")
+    res = await send_recruit_email(e, payload.kind, payload.note)
+    if not res.get("sent") and res.get("error") == "no_date":
+        raise HTTPException(status_code=400,
+                            detail="Cannot work out an eligibility date for this enquiry (no date of birth on record).")
+    return res
 
 
 # ---------------------------------------------------------------------------

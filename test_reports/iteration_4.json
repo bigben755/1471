@@ -1,0 +1,44 @@
+{
+  "summary": "End-to-end verification of the NEW Recruitment 'joining instructions' + 'countdown' email feature. Wrote 12 new pytest cases covering per-prospect + bulk endpoints and the no-dob 400 edge case (all pass). Exercised the RecruitmentPanel UI as admin: buckets render, bulk buttons render with correct labels/counts, per-prospect dialogs open with correct titles (Send joining instructions vs Send countdown email), countdown banner + 'Can join <date> · <countdown> to go' line render, sending yields the expected success toast, dialog closes, and post-reload the '<kind> email sent' badge is persisted on each card. Bulk send for the 'future' bucket also succeeds.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/enquiries/{id}/recruit-email", "issue": "When kind='countdown' is sent against a prospect currently in the 'now' eligibility group, the server still emails a countdown template with target=today (eligible_date returns today.isoformat()). Not observed to affect the UI (bucket dictates the button), but the endpoint itself will happily send an inappropriate template if a caller sets kind=countdown for a 'now' prospect. Consider rejecting or auto-switching to 'joining'."},
+      {"endpoint": "POST /api/enquiries/recruit-email/bulk", "issue": "res.get('sent') is True even when send_email() returned status='skipped' (no email backend configured); the response counter reports these as 'sent'. Minor - Emergent proxy is configured so real status is 'sent', but the naming is ambiguous."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RecruitmentPanel toast description", "issues": ["Success toast for joining instructions reads 'Email sent. Joining instructions sent.' - the two sentences are redundant. Consider a single sentence, e.g. 'Joining instructions emailed to <name>.'"]},
+      {"screen": "RecruitmentPanel prospect card countdown line", "issues": ["'about 1 month 19d to go' mixes long/short forms. Consider consistent formatting: 'about 1 month, 19 days to go'. Same mix appears in the countdown-dialog banner."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_recruit_email.py",
+    "/app/test_reports/pytest/pytest_recruit_email.xml"
+  ],
+  "action_items": [
+    "Optional: guard POST /api/enquiries/{id}/recruit-email so kind='countdown' with a 'now'-eligibility prospect either auto-coerces or 400s (currently returns eligible_date=today).",
+    "Optional polish: unify countdown wording (see design_issues) and de-duplicate the success toast title/description."
+  ],
+  "critical_code_review_comments": [
+    "server.py has grown past 1100 lines; splitting into routers (auth/users/events/notices/messages/enquiries/broadcast/newsletters/recruit) is now overdue and previously flagged in iteration_3.",
+    "send_recruit_email() writes status='actioned' unconditionally even when the email backend returned status='skipped' or 'error'. Consider only setting 'actioned' when status=='sent', otherwise operator will assume delivery.",
+    "eligible_date() returns date.today() for 'now' prospects; if a staff member sends kind='countdown' via the API for such a prospect, _countdown_html() will render a countdown of 'you can join us now'. Not user-facing right now (UI uses bucket to choose kind) but the endpoint contract is loose.",
+    "In RecruitmentPanel.sendEmail(), when res.email_status is neither 'sent' nor 'skipped' (i.e. 'error'), the UI still shows a success toast because the fallback branch is 'Email queued.'. Consider surfacing errors distinctly (res.email_status === 'error' -> toast.error).",
+    "RecruitmentPanel.sendBulk() uses window.confirm() rather than a shadcn AlertDialog - inconsistent with other bulk actions in the portal."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_recruit_email.py (new, 12 tests, all pass)",
+    "/app/test_reports/pytest/pytest_recruit_email.xml (junit output)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% of flows tested"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Session-scoped seeds created via public POST /api/enquiries: TEST_Recruit Now (yr8), TEST_Recruit Sept (yr7_starting_yr8), TEST_Recruit Future (under_12 w/ dob), TEST_Recruit NoDOB (under_12, no dob). All four are auto-deleted by fixture teardown. Existing demo enquiries (Jo Eight / Alex Young / Sam Small) are left untouched. A live email was sent to Alex Young + Jo Eight + Sam Small via the Emergent proxy during UI testing - these are the same demo recipients the previous iteration used, so no new external addresses were contacted.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New test file: /app/backend/tests/test_recruit_email.py. Run with `REACT_APP_BACKEND_URL=https://raf-horwich.preview.emergentagent.com pytest backend/tests/ -v`. RecruitmentPanel data-testids used: bucket-{now|september|future}, bucket-count-{key}, bucket-email-all-{key}, prospect-email-<id>, prospect-create-<id>, recruit-email-dialog, recruit-note, recruit-email-send. The recruit-email-dialog uses shadcn Dialog wrapper; title selector 'h2' inside it works. window.confirm() must be stubbed to true in Playwright to test bulk sends. Every send response now includes eligible_date; the tracker exposes eligible_date + last_recruit_email in _enquiry_out. Emergent email proxy is live so email_status returns 'sent' for real; TEST_ enquiries route to example.com addresses that bounce silently but API still reports success.",
+  "rca of the issue": "N/A - no blocking issues found. All 6 review-request features verified working end-to-end. Only minor semantic issues + design polish noted."
+}
