@@ -11,10 +11,10 @@ export const CREST_URL =
 // Squadron photographs (served locally from /public/squadron)
 const IMG = (f) => `/squadron/${f}`;
 
-export const SKY_HERO = IMG("flying-up-in-the-sky.jpg");
-export const CLOUDS_WIDE = IMG("flying-cadets-on-the-flightline.jpg");
+export const SKY_HERO = IMG("flying/flying-up-in-the-sky.jpg");
+export const CLOUDS_WIDE = IMG("flying/flying-cadets-on-the-flightline.jpg");
 export const ABOUT_IMG = IMG("parade-evening-awards-night.jpg");
-export const PARENTS_IMG = IMG("presentation-evening-1.jpg");
+export const PARENTS_IMG = IMG("awards/presentation-evening-1.jpg");
 
 export const NAV_ITEMS = [
   { label: "Home", to: "/" },
@@ -56,20 +56,20 @@ export const ABOUT_CARDS = [
 export const ACTIVITIES = [
   {
     slug: "flying", title: "Flying", icon: Plane,
-    image: IMG("flying-cadets-ready-for-flight.jpg"),
+    image: IMG("flying/flying-cadets-ready-for-flight.jpg"),
     gallery: [
-      { src: IMG("flying-cadet-being-fitted-with-kit.jpg"), caption: "Being fitted with flying kit" },
-      { src: IMG("flying-getting-in-the-aircraft.jpg"), caption: "Getting into the aircraft" },
-      { src: IMG("flying-cadet-in-cockpit.jpg"), caption: "In the cockpit" },
-      { src: IMG("flying-cadet-in-cockpit-2.jpg"), caption: "Ready at the controls" },
-      { src: IMG("flying-happy-in-the-cockpit.jpg"), caption: "All smiles before take-off" },
-      { src: IMG("flying-ready-for-take-off.jpg"), caption: "Ready for take-off" },
-      { src: IMG("flying-view-from-the-cockpit.jpg"), caption: "The view from the cockpit" },
-      { src: IMG("flying-up-in-the-sky.jpg"), caption: "Up in the sky" },
-      { src: IMG("flying-cadets-on-the-flightline.jpg"), caption: "Cadets on the flightline" },
-      { src: IMG("flying-cadets-walk-to-the-flightline.jpg"), caption: "Walking out to the flightline" },
-      { src: IMG("flying-award-1.jpg"), caption: "Flying award" },
-      { src: IMG("flying-award-2.jpg"), caption: "Celebrating a flying achievement" },
+      { src: IMG("flying/flying-cadet-being-fitted-with-kit.jpg"), caption: "Being fitted with flying kit" },
+      { src: IMG("flying/flying-getting-in-the-aircraft.jpg"), caption: "Getting into the aircraft" },
+      { src: IMG("flying/flying-cadet-in-cockpit.jpg"), caption: "In the cockpit" },
+      { src: IMG("flying/flying-cadet-in-cockpit-2.jpg"), caption: "Ready at the controls" },
+      { src: IMG("flying/flying-happy-in-the-cockpit.jpg"), caption: "All smiles before take-off" },
+      { src: IMG("flying/flying-ready-for-take-off.jpg"), caption: "Ready for take-off" },
+      { src: IMG("flying/flying-view-from-the-cockpit.jpg"), caption: "The view from the cockpit" },
+      { src: IMG("flying/flying-up-in-the-sky.jpg"), caption: "Up in the sky" },
+      { src: IMG("flying/flying-cadets-on-the-flightline.jpg"), caption: "Cadets on the flightline" },
+      { src: IMG("flying/flying-cadets-walk-to-the-flightline.jpg"), caption: "Walking out to the flightline" },
+      { src: IMG("awards/flying-award-1.jpg"), caption: "Flying award" },
+      { src: IMG("awards/flying-award-2.jpg"), caption: "Celebrating a flying achievement" },
     ],
     text: "Cadets may have opportunities to experience flying through RAF Air Cadets activities, subject to availability and eligibility.",
     long: [
@@ -85,10 +85,12 @@ export const ACTIVITIES = [
   },
   {
     slug: "gliding", title: "Gliding", icon: Wind,
-    image: IMG("gliding-cadet-in-glider.jpg"),
+    image: IMG("gliding/gliding-cadet-in-glider.jpg"),
     gallery: [
-      { src: IMG("gliding-cadet-in-glider.jpg"), caption: "A cadet in the glider" },
-      { src: IMG("gliding-cadets-helping.jpg"), caption: "Cadets helping on the airfield" },
+      { src: IMG("gliding/gliding-cadet-in-glider.jpg"), caption: "A cadet in the glider" },
+      { src: IMG("gliding/gliding-cadets-helping.jpg"), caption: "Cadets helping on the airfield" },
+      { src: IMG("gliding/20230617_102323.jpg"), caption: "Preparing for gliding" },
+      { src: IMG("gliding/20230617_141944.jpg"), caption: "Gliding day on the airfield" },
     ],
     text: "Cadets can work towards gliding experiences delivered in line with RAFAC procedures and programme planning.",
     long: [
@@ -108,6 +110,10 @@ export const ACTIVITIES = [
     gallery: [
       { src: IMG("overseas-1.jpg"), caption: "Adventure overseas" },
       { src: IMG("overseas-1-group-photo.jpg"), caption: "The team on an overseas trip" },
+      { src: IMG("overseas/20260526_131607.jpg"), caption: "Adventure training overseas" },
+      { src: IMG("overseas/20260526_141606.jpg"), caption: "Outdoor challenge activity" },
+      { src: IMG("overseas/20260526_174730.jpg"), caption: "Teamwork in action" },
+      { src: IMG("overseas/20260527_145947(0).jpg"), caption: "Cadets exploring overseas" },
     ],
     text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent.",
     long: [
@@ -151,11 +157,11 @@ export const ACTIVITIES = [
   },
   {
     slug: "leadership", title: "Leadership", icon: Compass,
-    image: IMG("presentation-evening-2.jpg"),
+    image: IMG("awards/presentation-evening-2.jpg"),
     gallery: [
-      { src: IMG("presentation-evening-1.jpg"), caption: "Presentation evening" },
-      { src: IMG("presentation-evening-2.jpg"), caption: "Recognising achievement" },
-      { src: IMG("presentation-evening-3.jpg"), caption: "Awards and progression" },
+      { src: IMG("awards/presentation-evening-1.jpg"), caption: "Presentation evening" },
+      { src: IMG("awards/presentation-evening-2.jpg"), caption: "Recognising achievement" },
+      { src: IMG("awards/presentation-evening-3.jpg"), caption: "Awards and progression" },
       { src: IMG("parade-evening-awards-night.jpg"), caption: "Awards night on parade" },
     ],
     text: "Practical leadership tasks, teamwork challenges and NCO development opportunities.",
@@ -172,6 +178,15 @@ export const ACTIVITIES = [
   },
   {
     slug: "fieldcraft", title: "Fieldcraft", icon: Tent,
+    image: IMG("fieldcraft/20260721_083302 (1).jpg"),
+    gallery: [
+      { src: IMG("fieldcraft/20260720_190743.jpg"), caption: "Fieldcraft training" },
+      { src: IMG("fieldcraft/20260720_234038.jpg"), caption: "Night exercise" },
+      { src: IMG("fieldcraft/20260721_083302 (1).jpg"), caption: "Morning in the field" },
+      { src: IMG("fieldcraft/20260721_102342.jpg"), caption: "Working as a team" },
+      { src: IMG("fieldcraft/20260721_201242.jpg"), caption: "Practical field skills" },
+      { src: IMG("fieldcraft/20260721_210758.jpg"), caption: "Evening fieldcraft session" },
+    ],
     text: "Learn navigation, teamwork and outdoor skills through structured fieldcraft training.",
     long: [
       "Fieldcraft teaches cadets how to work effectively as a team in the outdoors, covering navigation, communication and practical field skills.",
@@ -207,14 +222,17 @@ export const ACTIVITIES = [
   },
   {
     slug: "camps", title: "Camps", icon: TentTree,
-    image: IMG("raf-station-visit-bbmf-group-photo.jpg"),
+    image: IMG("raf_station_visits/raf-station-visit-bbmf-group-photo.jpg"),
     gallery: [
-      { src: IMG("raf-station-visit-bbmf-group-photo.jpg"), caption: "Group photo at a station visit" },
-      { src: IMG("raf-station-visit-1-cadet-in-a-typhoon-raf-coningsby.jpg"), caption: "A cadet in a Typhoon, RAF Coningsby" },
-      { src: IMG("raf-station-visit-1-raf-typhoon.jpg"), caption: "Up close with an RAF Typhoon" },
-      { src: IMG("raf-station-visit-1-tour-round-a-typhoon-by-raf-pilot.jpg"), caption: "A tour of the Typhoon with an RAF pilot" },
-      { src: IMG("raf-station-visit-2-bbmf-spitfire.jpg"), caption: "BBMF Spitfire" },
-      { src: IMG("raf-station-visit-2-bbmf-lancaster.jpg"), caption: "BBMF Lancaster" },
+      { src: IMG("raf_station_visits/raf-station-visit-bbmf-group-photo.jpg"), caption: "Group photo at a station visit" },
+      { src: IMG("raf_station_visits/20240221_131627.jpg"), caption: "Cadets on station visit" },
+      { src: IMG("raf_station_visits/raf-station-visit-1-cadet-in-a-typhoon-raf-coningsby.jpg"), caption: "A cadet in a Typhoon, RAF Coningsby" },
+      { src: IMG("raf_station_visits/raf-station-visit-1-raf-typhoon.jpg"), caption: "Up close with an RAF Typhoon" },
+      { src: IMG("raf_station_visits/raf-station-visit-1-tour-round-a-typhoon-by-raf-pilot.jpg"), caption: "A tour of the Typhoon with an RAF pilot" },
+      { src: IMG("raf_station_visits/raf-station-visit-2-bbmf-spitfire.jpg"), caption: "BBMF Spitfire" },
+      { src: IMG("raf_station_visits/raf-station-visit-2-bbmf-lancaster.jpg"), caption: "BBMF Lancaster" },
+      { src: IMG("air_shows/cosford airshow 4 - access all areas.jpg"), caption: "Air show access-all-areas experience" },
+      { src: IMG("air_shows/riat (4).JPG"), caption: "Cadets at RIAT" },
     ],
     text: "Cadets may attend camps and visits, including activities at RAF stations where available.",
     long: [
@@ -234,9 +252,13 @@ export const ACTIVITIES = [
     gallery: [
       { src: IMG("parade-1-confirmation-of-the-king-1.jpg"), caption: "On parade" },
       { src: IMG("parade-1-confirmation-of-the-king-2.jpg"), caption: "Ceremonial bearing" },
-      { src: IMG("rememberance-sunday-parade-1.jpg"), caption: "Remembrance Sunday parade" },
-      { src: IMG("rememberance-sunday-parade-2.jpg"), caption: "Marching with pride" },
-      { src: IMG("rememberance-parade-1.jpg"), caption: "Remembrance parade" },
+      { src: IMG("parades/rememberance-sunday-parade-1.jpg"), caption: "Remembrance Sunday parade" },
+      { src: IMG("parades/rememberance-sunday-parade-2.jpg"), caption: "Marching with pride" },
+      { src: IMG("parades/rememberance-parade-1.jpg"), caption: "Remembrance parade" },
+      { src: IMG("parades/drill training.jpg"), caption: "Drill training" },
+      { src: IMG("parades/drill training 2.jpg"), caption: "Drill practice" },
+      { src: IMG("parades/drill training 3.jpg"), caption: "Precision and teamwork" },
+      { src: IMG("parades/20220911_122531.jpg"), caption: "Parade day" },
     ],
     text: "Develop discipline, pride and bearing through drill and uniform standards.",
     long: [
@@ -252,12 +274,19 @@ export const ACTIVITIES = [
   },
   {
     slug: "aviation-studies", title: "Aviation Studies", icon: BookOpen,
-    image: IMG("flight-sim-1.jpg"),
+    image: IMG("flight_sim/flight-sim-1.jpg"),
     gallery: [
-      { src: IMG("flight-sim-1.jpg"), caption: "On the flight simulator" },
-      { src: IMG("flight-sim-2.jpg"), caption: "Learning the controls" },
-      { src: IMG("flight-sim-3.jpg"), caption: "Putting theory into practice" },
-      { src: IMG("careers-day-at-mbda.jpg"), caption: "Careers day at MBDA" },
+      { src: IMG("flight_sim/flight-sim-1.jpg"), caption: "On the flight simulator" },
+      { src: IMG("flight_sim/flight-sim-2.jpg"), caption: "Learning the controls" },
+      { src: IMG("flight_sim/flight-sim-3.jpg"), caption: "Putting theory into practice" },
+      { src: IMG("careeers-days/careers-day-at-mbda.jpg"), caption: "Careers day at MBDA" },
+      { src: IMG("classification_training/training - propulsion.jpg"), caption: "Classification training: propulsion" },
+      { src: IMG("classification_training/training - propulsion 2.jpg"), caption: "Classification lesson" },
+      { src: IMG("classification_training/20250607_120541.jpg"), caption: "Classroom instruction" },
+      { src: IMG("stem/20260510_114429.jpg"), caption: "STEM activity" },
+      { src: IMG("stem/20260510_135743.jpg"), caption: "Hands-on STEM learning" },
+      { src: IMG("air_shows/cosford (1).jpg"), caption: "Aviation learning at an air show" },
+      { src: IMG("air_shows/riat (2).JPG"), caption: "Aircraft and air power insight" },
     ],
     text: "Build knowledge of aircraft, navigation, air power and the principles of flight.",
     long: [
@@ -278,9 +307,15 @@ export const ACTIVITIES = [
       { src: IMG("poppy-appeal-collecting.jpg"), caption: "Collecting for the Poppy Appeal" },
       { src: IMG("poppy-appeal-collecting-2.jpg"), caption: "Supporting the Poppy Appeal" },
       { src: IMG("poppy-appeal-1.jpg"), caption: "Poppy Appeal" },
+      { src: IMG("fundraising/20241102_124752.jpg"), caption: "Community fundraising" },
+      { src: IMG("fundraising/20251101_092450.jpg"), caption: "Cadets supporting a local appeal" },
+      { src: IMG("fundraising/20251101_131631.jpg"), caption: "Fundraising in the community" },
+      { src: IMG("fundraising/poppy appeal collecting.jpg"), caption: "Poppy Appeal collection" },
       { src: IMG("rememberance-concert-bolton-1.jpg"), caption: "Remembrance concert, Bolton" },
       { src: IMG("rememberance-concert-2.jpg"), caption: "Remembrance concert" },
       { src: IMG("rememberance-concert-3.jpg"), caption: "Honouring those who served" },
+      { src: IMG("parades/FB_IMG_1762722018807.jpg"), caption: "Representing the squadron at a parade" },
+      { src: IMG("parades/rememberance sunday parade 3.jpg"), caption: "Remembrance parade attendance" },
     ],
     text: "Represent the squadron at parades, fundraising and local community events.",
     long: [
