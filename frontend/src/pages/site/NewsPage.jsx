@@ -20,7 +20,7 @@ export default function NewsPage() {
 
   return (
     <div data-testid="news-page">
-      <Seo title="News | 1471 Horwich Squadron RAF Air Cadets" description="Latest news, achievements and events from 1471 Horwich Squadron RAF Air Cadets." />
+      <Seo title="News | 1471 Horwich Squadron RAF Air Cadets" description="Latest stories, achievements, activities and events from 1471 Horwich Squadron RAF Air Cadets, including cadet progression and community highlights." />
 
       <section className="relative bg-raf-navy text-white overflow-hidden">
         <div className="absolute inset-0 route-lines opacity-30" />
@@ -33,6 +33,27 @@ export default function NewsPage() {
 
       <section className="py-16 md:py-24 bg-white">
         <div className="max-w-7xl mx-auto px-5 md:px-10">
+          <Reveal>
+            <div className="mb-10 grid lg:grid-cols-3 gap-4">
+              <div className="lg:col-span-2 border border-raf-sky bg-raf-sky/40 p-6 md:p-7">
+                <h2 className="font-display text-2xl font-bold text-raf-navy">What you will find in squadron news</h2>
+                <p className="mt-3 text-raf-slate leading-relaxed">
+                  We share activity highlights, cadet achievements, parade milestones and community events so prospective cadets and families can see what squadron life looks like in practice.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/join", { state: { enquiryType: "Join as a Cadet" } })}
+                className="text-left border border-raf-blue bg-raf-blue text-white p-6 md:p-7 hover:bg-raf-navy transition-colors"
+              >
+                <p className="font-display text-xl font-bold">Inspired by what you see?</p>
+                <p className="mt-2 text-white/80 text-sm leading-relaxed">Send a cadet enquiry and start your own journey with the squadron.</p>
+                <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold">
+                  Join now <ArrowRight size={15} />
+                </span>
+              </button>
+            </div>
+          </Reveal>
+
           {loading ? (
             <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>
           ) : posts.length === 0 ? (

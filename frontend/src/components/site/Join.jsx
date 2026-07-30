@@ -264,6 +264,44 @@ export const Join = () => {
             </div>
           </form>
         </Reveal>
+
+        <Reveal delay={0.12}>
+          <div className="mt-10 grid lg:grid-cols-2 gap-6">
+            <div className="border border-raf-sky bg-raf-sky/40 p-6 md:p-7">
+              <h3 className="font-display text-2xl font-bold text-raf-navy">What happens next?</h3>
+              <ol className="mt-4 space-y-3">
+                {[
+                  "A member of the squadron team reviews your enquiry.",
+                  "You receive a response with next steps and key information.",
+                  "If suitable, you are invited into the appropriate joining process.",
+                  "You can then decide whether to continue with no pressure.",
+                ].map((step, i) => (
+                  <li key={step} className="flex items-start gap-3 text-sm text-raf-slate leading-relaxed">
+                    <span className="w-6 h-6 shrink-0 flex items-center justify-center bg-raf-red text-white font-bold text-xs">{i + 1}</span>
+                    {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="border border-raf-sky bg-white p-6 md:p-7">
+              <h3 className="font-display text-2xl font-bold text-raf-navy">Before you submit</h3>
+              <ul className="mt-4 space-y-3">
+                {[
+                  "Choose the enquiry type that best matches your situation.",
+                  "Add a short message so staff can respond accurately.",
+                  "For cadet enquiries, include date of birth details carefully.",
+                  "If unsure, use General Enquiry and we will direct you.",
+                ].map((tip) => (
+                  <li key={tip} className="flex items-start gap-3 text-sm text-raf-slate leading-relaxed">
+                    <span className="mt-1 w-2.5 h-2.5 bg-raf-blue shrink-0" />
+                    {tip}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Reveal>
       </div>
     </section>
   );

@@ -24,7 +24,7 @@ export default function NewsDetailPage() {
 
   return (
     <div data-testid="news-detail-page">
-      <Seo title={`${post.title} | News | 1471 Horwich Squadron`} description={post.excerpt || post.title} />
+      <Seo title={`${post.title} | News | 1471 Horwich Squadron RAF Air Cadets`} description={post.excerpt || post.title} />
 
       <section className="relative bg-raf-navy text-white overflow-hidden">
         {post.cover_image_url && (

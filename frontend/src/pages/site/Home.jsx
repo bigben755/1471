@@ -7,9 +7,28 @@ import {
   Compass, Plane, Rocket, HeartHandshake, HelpCircle, GraduationCap, ArrowRight, MapPin, Clock,
 } from "lucide-react";
 
+const TRUST_SIGNALS = [
+  {
+    title: "Built for ages 12 to 17",
+    text: "A youth development environment focused on confidence, teamwork and practical skills.",
+  },
+  {
+    title: "Not a recruiting organisation",
+    text: "Cadet experiences support any future path, whether that is college, work, apprenticeships or service.",
+  },
+  {
+    title: "Structured parade nights",
+    text: "Consistent weekly routines help cadets balance squadron life with school, hobbies and family commitments.",
+  },
+  {
+    title: "Safeguarding and supervision",
+    text: "Activities are delivered with trained staff, clear procedures and age-appropriate support.",
+  },
+];
+
 const CARDS = [
   { to: "/about", title: "About the Squadron", text: "Who we are and what being part of the RAF Air Cadets involves.", icon: Compass },
-  { to: "/activities", title: "Activities", text: "Flying, gliding, adventure training, DofE, first aid, sport and more.", icon: Plane },
+  { to: "/activities", title: "Activities", text: "Explore detailed pathways in flying, overseas camp, fieldcraft, leadership, sport and more.", icon: Plane },
   { to: "/cadets", title: "For Cadets", text: "Thinking about joining? Here's what you could get involved in.", icon: Rocket },
   { to: "/parents", title: "For Parents & Carers", text: "Structure, supervision and the value of cadet experience.", icon: GraduationCap },
   { to: "/volunteer", title: "Volunteer", text: "Adults are essential to the squadron — discover how to help.", icon: HeartHandshake },
@@ -22,7 +41,7 @@ export default function Home() {
     <div data-testid="home-page">
       <Seo
         title="1471 Horwich Squadron RAF Air Cadets | Horwich Air Cadets"
-        description="Join 1471 Horwich Squadron RAF Air Cadets in Horwich. Aviation, adventure training, leadership, DofE, first aid, camps, sport and youth development for young people, with opportunities for adult volunteers."
+        description="Join 1471 Horwich Squadron RAF Air Cadets in Horwich. Explore flying, adventure, overseas camp, RAF station visits, airshows, leadership, first aid, DofE and youth development pathways, plus adult volunteer opportunities."
       />
       <Hero />
 
@@ -32,7 +51,7 @@ export default function Home() {
             <SectionHeading
               eyebrow="Explore the squadron"
               title="Find your way in"
-              intro="Everything you need, organised into clear sections for young people, parents and prospective volunteers."
+              intro="Start with the activity pages to see exactly what cadet life can look like, from first parade night to camps, flying and leadership milestones."
             />
           </Reveal>
 
@@ -76,6 +95,28 @@ export default function Home() {
             <button data-testid="home-volunteer" onClick={() => navigate("/join", { state: { enquiryType: "Adult Volunteer Enquiry" } })} className="px-7 py-3.5 bg-white text-raf-navy font-semibold hover:bg-raf-sky transition-colors">
               Volunteer
             </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 md:py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-5 md:px-10">
+          <Reveal>
+            <SectionHeading
+              eyebrow="Why families choose us"
+              title="Clear, trusted and youth-focused"
+              intro="The RAF Air Cadets model combines challenge and progression with the structure and support families expect."
+            />
+          </Reveal>
+          <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {TRUST_SIGNALS.map((item, i) => (
+              <Reveal key={item.title} delay={i * 0.06}>
+                <div className="h-full border border-raf-sky bg-raf-sky/35 p-5">
+                  <h3 className="font-display text-lg font-bold text-raf-navy">{item.title}</h3>
+                  <p className="mt-2 text-sm text-raf-slate leading-relaxed">{item.text}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>

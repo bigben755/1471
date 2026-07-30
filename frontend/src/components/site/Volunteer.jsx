@@ -190,6 +190,13 @@ const DEVELOPMENT_OPPORTUNITIES = [
 export const Volunteer = () => {
   const navigate = useNavigate();
 
+  const volunteerRequirements = [
+    "Age 20+ for most CFAV pathways (specific routes can vary).",
+    "A realistic monthly commitment agreed with squadron staff.",
+    "Good communication, reliability and a positive approach with young people.",
+    "Willingness to complete induction, training and required clearances.",
+  ];
+
   const [selectedRoute, setSelectedRoute] = useState("ci");
   const [selectedArea, setSelectedArea] = useState("training");
 
@@ -248,6 +255,24 @@ export const Volunteer = () => {
               aspirations and experiences of local young people while
               developing valuable skills of your own.
             </p>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.1}>
+          <div className="mt-8 border border-raf-navy/15 bg-white p-6 md:p-7">
+            <h3 className="font-display text-2xl font-bold text-raf-navy">Volunteer requirements at a glance</h3>
+            <p className="mt-3 text-raf-slate leading-relaxed">
+              You do not need military or aviation experience to start. We look for commitment, kindness,
+              organisation and a genuine interest in helping young people develop.
+            </p>
+            <ul className="mt-4 grid md:grid-cols-2 gap-3">
+              {volunteerRequirements.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-sm text-raf-slate leading-relaxed bg-raf-sky/45 p-3 border border-raf-sky">
+                  <ChevronRight size={16} className="mt-0.5 shrink-0 text-raf-red" />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
         </Reveal>
 

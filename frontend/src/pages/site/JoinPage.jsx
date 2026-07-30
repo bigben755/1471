@@ -6,7 +6,7 @@ export default function JoinPage() {
     <div data-testid="join-page">
       <Seo
         title="Join | 1471 Horwich Squadron RAF Air Cadets"
-        description="Join 1471 Horwich Squadron RAF Air Cadets. Send an enquiry as a prospective cadet, a parent or carer, or an adult volunteer."
+        description="Join 1471 Horwich Squadron RAF Air Cadets through a simple enquiry process for cadets, parents and carers, adult volunteers and committee support, with clear next-step guidance."
       />
       <Join />
     </div>

@@ -5,6 +5,25 @@ import { ArrowRight } from "lucide-react";
 
 export const Parents = () => {
   const navigate = useNavigate();
+  const onboarding = [
+    "Submit an enquiry and speak with squadron staff.",
+    "Attend joining discussions and receive key information.",
+    "Complete required forms and eligibility checks.",
+    "Start parade nights with support from staff and peers.",
+  ];
+
+  const reassurances = [
+    "Clear communication about activities and expectations.",
+    "Structured supervision and safeguarding procedures.",
+    "A balanced programme focused on growth and wellbeing.",
+  ];
+
+  const safeguardingPoints = [
+    "Cadet wellbeing and safety are central to programme delivery.",
+    "Staff and volunteers operate within RAF Air Cadets policy and procedure.",
+    "Parents and carers are encouraged to ask questions at any stage.",
+  ];
+
   return (
   <section id="parents" data-testid="parents-section" className="py-20 md:py-28 bg-white">
     <div className="max-w-7xl mx-auto px-5 md:px-10">
@@ -62,6 +81,53 @@ export const Parents = () => {
           >
             Ask a question <ArrowRight size={18} />
           </button>
+        </div>
+      </Reveal>
+
+      <div className="mt-12 grid lg:grid-cols-2 gap-8">
+        <Reveal>
+          <div className="border border-raf-sky bg-white p-7 md:p-8">
+            <h3 className="font-display text-2xl font-bold text-raf-navy">What joining usually looks like</h3>
+            <ol className="mt-5 space-y-3">
+              {onboarding.map((step, i) => (
+                <li key={step} className="flex items-start gap-3 text-sm text-raf-slate leading-relaxed">
+                  <span className="w-6 h-6 shrink-0 flex items-center justify-center bg-raf-red text-white font-bold text-xs">{i + 1}</span>
+                  {step}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.08}>
+          <div className="border border-raf-sky bg-raf-sky/40 p-7 md:p-8">
+            <h3 className="font-display text-2xl font-bold text-raf-navy">What parents value most</h3>
+            <ul className="mt-5 space-y-3">
+              {reassurances.map((point) => (
+                <li key={point} className="flex items-start gap-3 text-sm text-raf-slate leading-relaxed">
+                  <span className="mt-1 w-2.5 h-2.5 bg-raf-red shrink-0" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+      </div>
+
+      <Reveal delay={0.12}>
+        <div className="mt-8 bg-raf-navy text-white p-7 md:p-9">
+          <h3 className="font-display text-2xl font-bold">Safeguarding and trust</h3>
+          <p className="mt-3 text-white/80 leading-relaxed">
+            Parents and carers should feel confident that cadet settings are safe, inclusive and nurturing.
+            We treat safeguarding as a core priority across squadron activity.
+          </p>
+          <ul className="mt-5 grid md:grid-cols-3 gap-3">
+            {safeguardingPoints.map((point) => (
+              <li key={point} className="bg-white/10 border border-white/15 p-4 text-sm text-white/90 leading-relaxed">
+                {point}
+              </li>
+            ))}
+          </ul>
         </div>
       </Reveal>
     </div>

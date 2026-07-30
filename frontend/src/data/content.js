@@ -2,7 +2,7 @@
 import {
   Plane, Wind, Mountain, Award, HeartPulse, Compass, Tent, Trophy,
   TentTree, Shield, BookOpen, HeartHandshake, GraduationCap, Users,
-  Globe2, FileText, BadgeCheck, Briefcase,
+  Globe2, FileText, BadgeCheck, Briefcase, Sailboat,
 } from "lucide-react";
 
 export const CREST_URL =
@@ -56,6 +56,13 @@ export const ABOUT_CARDS = [
 export const ACTIVITIES = [
   {
     slug: "flying", title: "Flying", icon: Plane,
+    strapline: "Take your first steps from runway to cockpit.",
+    quickFacts: ["RAF Air Cadets flying opportunities", "Powered aircraft experience", "Subject to availability and eligibility"],
+    whatToExpect: [
+      "Pre-flight briefings and safety checks with staff guidance",
+      "Hands-on exposure to cockpit controls and airmanship basics",
+      "A memorable sortie that builds confidence in aviation settings",
+    ],
     image: IMG("flying/flying-cadets-ready-for-flight.jpg"),
     gallery: [
       { src: IMG("flying/flying-cadet-being-fitted-with-kit.jpg"), caption: "Being fitted with flying kit" },
@@ -85,6 +92,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "gliding", title: "Gliding", icon: Wind,
+    strapline: "Experience quiet flight and precision in the air.",
+    quickFacts: ["Winch/tow launch environment", "Team-led airfield routines", "Weather and safety dependent"],
+    whatToExpect: [
+      "Airfield teamwork supporting launch and recovery routines",
+      "Learning how lift, balance and control work in a glider",
+      "A focused flying experience that grows calm decision-making",
+    ],
     image: IMG("gliding/gliding-cadet-in-glider.jpg"),
     gallery: [
       { src: IMG("gliding/gliding-cadet-in-glider.jpg"), caption: "A cadet in the glider" },
@@ -106,14 +120,12 @@ export const ACTIVITIES = [
   },
   {
     slug: "adventure-training", title: "Adventure Training", icon: Mountain,
-    image: IMG("overseas-1-group-photo.jpg"),
-    gallery: [
-      { src: IMG("overseas-1.jpg"), caption: "Adventure overseas" },
-      { src: IMG("overseas-1-group-photo.jpg"), caption: "The team on an overseas trip" },
-      { src: IMG("overseas/20260526_131607.jpg"), caption: "Adventure training overseas" },
-      { src: IMG("overseas/20260526_141606.jpg"), caption: "Outdoor challenge activity" },
-      { src: IMG("overseas/20260526_174730.jpg"), caption: "Teamwork in action" },
-      { src: IMG("overseas/20260527_145947(0).jpg"), caption: "Cadets exploring overseas" },
+    strapline: "Push your comfort zone in the outdoors.",
+    quickFacts: ["Climbing, hill and paddlesport themes", "Instructor-led and supervised", "Progressive challenge levels"],
+    whatToExpect: [
+      "Outdoor challenges designed to build grit and self-belief",
+      "Working in teams to solve route, movement and safety tasks",
+      "Structured adventures that reward preparation and attitude",
     ],
     text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent.",
     long: [
@@ -128,7 +140,47 @@ export const ACTIVITIES = [
     ],
   },
   {
+    slug: "overseas-camp", title: "Overseas Camp", icon: Sailboat,
+    strapline: "Travel, challenge and bond on an international camp.",
+    quickFacts: ["International destinations", "Team-focused camp programme", "Eligibility and places apply"],
+    whatToExpect: [
+      "Shared travel and camp routines that build independence",
+      "Adventure sessions and cultural experiences with your team",
+      "A confidence-boosting trip you will remember for years",
+    ],
+    image: IMG("overseas-1-group-photo.jpg"),
+    gallery: [
+      { src: IMG("overseas-1.jpg"), caption: "Adventure overseas" },
+      { src: IMG("overseas-1-group-photo.jpg"), caption: "The team on an overseas trip" },
+      { src: IMG("overseas/20260526_131607.jpg"), caption: "Arrival and briefing" },
+      { src: IMG("overseas/20260526_131759.jpg"), caption: "Camp activity preparation" },
+      { src: IMG("overseas/20260526_141606.jpg"), caption: "Outdoor challenge activity" },
+      { src: IMG("overseas/20260526_174730.jpg"), caption: "Teamwork in action" },
+      { src: IMG("overseas/20260526_211935.jpg"), caption: "Evening camp atmosphere" },
+      { src: IMG("overseas/20260526_211945.jpg"), caption: "Camp life with the team" },
+      { src: IMG("overseas/20260527_145947(0).jpg"), caption: "Cadets exploring overseas" },
+    ],
+    text: "International camp experiences focused on teamwork, independence and cultural adventure.",
+    long: [
+      "Overseas camps give cadets the chance to take part in unforgettable trips abroad, combining adventure, team activities and personal development.",
+      "These opportunities are planned and supervised through RAF Air Cadets procedures, with places, dates and destinations based on availability and eligibility.",
+    ],
+    highlights: [
+      "Take part in a structured overseas camp experience",
+      "Build confidence and independence away from home",
+      "Develop teamwork with cadets across activities",
+      "Gain memorable international experiences where available",
+    ],
+  },
+  {
     slug: "dofe", title: "Duke of Edinburgh\u2019s Award", icon: Award,
+    strapline: "Earn a respected award with real-world value.",
+    quickFacts: ["Bronze, Silver and Gold pathways", "Volunteering + physical + skill", "Expedition at each level"],
+    whatToExpect: [
+      "Setting personal goals and tracking your progress over time",
+      "Building resilience through expedition planning and delivery",
+      "A strong achievement you can use in CVs and applications",
+    ],
     text: "Cadets can work towards Bronze, Silver and Gold DofE awards through the squadron programme.",
     long: [
       "The Duke of Edinburgh\u2019s Award is a respected programme recognised by employers, colleges and universities. Cadets can work towards Bronze, Silver and Gold levels.",
@@ -143,6 +195,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "first-aid", title: "First Aid", icon: HeartPulse,
+    strapline: "Learn skills that can genuinely help save lives.",
+    quickFacts: ["Practical casualty care skills", "Scenario-based learning", "Recognised qualification routes"],
+    whatToExpect: [
+      "Realistic emergency scenarios to build calm, clear action",
+      "Core treatment skills such as recovery position and CPR",
+      "Confidence to step forward when someone needs help",
+    ],
     text: "Cadets may work towards recognised first aid training and qualifications, subject to eligibility.",
     long: [
       "First aid is a practical, life-relevant skill. Cadets may work towards recognised first aid training, learning how to help in an emergency.",
@@ -157,12 +216,12 @@ export const ACTIVITIES = [
   },
   {
     slug: "leadership", title: "Leadership", icon: Compass,
-    image: IMG("awards/presentation-evening-2.jpg"),
-    gallery: [
-      { src: IMG("awards/presentation-evening-1.jpg"), caption: "Presentation evening" },
-      { src: IMG("awards/presentation-evening-2.jpg"), caption: "Recognising achievement" },
-      { src: IMG("awards/presentation-evening-3.jpg"), caption: "Awards and progression" },
-      { src: IMG("parade-evening-awards-night.jpg"), caption: "Awards night on parade" },
+    strapline: "Lead teams, make decisions and grow your voice.",
+    quickFacts: ["Team challenge formats", "Communication under pressure", "NCO progression opportunities"],
+    whatToExpect: [
+      "Planning and briefing teammates for practical challenges",
+      "Rotating leadership roles to build confidence and adaptability",
+      "Feedback-driven development that sharpens decision-making",
     ],
     text: "Practical leadership tasks, teamwork challenges and NCO development opportunities.",
     long: [
@@ -177,7 +236,42 @@ export const ACTIVITIES = [
     ],
   },
   {
+    slug: "awards", title: "Awards", icon: Award,
+    strapline: "Celebrate achievement and progression across cadet life.",
+    quickFacts: ["Recognition evenings", "Cadet progression milestones", "Squadron achievement culture"],
+    whatToExpect: [
+      "Working towards goals that are formally recognised",
+      "Celebrating personal and team achievements with the squadron",
+      "Building pride and motivation through clear progression",
+    ],
+    image: IMG("awards/presentation-evening-2.jpg"),
+    gallery: [
+      { src: IMG("awards/presentation-evening-1.jpg"), caption: "Presentation evening" },
+      { src: IMG("awards/presentation-evening-2.jpg"), caption: "Recognising achievement" },
+      { src: IMG("awards/presentation-evening-3.jpg"), caption: "Awards and progression" },
+      { src: IMG("parade-evening-awards-night.jpg"), caption: "Awards night on parade" },
+    ],
+    text: "Squadron awards highlight effort, development, leadership and commitment across the year.",
+    long: [
+      "Awards are an important part of cadet motivation and progression, recognising effort, improvement and contribution in a structured way.",
+      "From parade-night achievements to formal presentation evenings, cadets can celebrate milestones with their peers, families and staff.",
+    ],
+    highlights: [
+      "Work towards recognised squadron milestones",
+      "Celebrate effort, commitment and progression",
+      "Build confidence through public recognition",
+      "Use achievements to support future applications",
+    ],
+  },
+  {
     slug: "fieldcraft", title: "Fieldcraft", icon: Tent,
+    strapline: "Master outdoor skills and teamwork in the field.",
+    quickFacts: ["Navigation and movement skills", "Structured day/night exercises", "Progressive field training"],
+    whatToExpect: [
+      "Map-reading and route-planning in realistic environments",
+      "Team movement, communication and problem-solving drills",
+      "Hands-on field sessions that reward discipline and teamwork",
+    ],
     image: IMG("fieldcraft/20260721_083302 (1).jpg"),
     gallery: [
       { src: IMG("fieldcraft/20260720_190743.jpg"), caption: "Fieldcraft training" },
@@ -201,6 +295,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "sport", title: "Sport", icon: Trophy,
+    strapline: "Compete, improve fitness and represent your squadron.",
+    quickFacts: ["Individual and team events", "Squadron to corps-level opportunities", "Inclusive participation"],
+    whatToExpect: [
+      "Regular activity that boosts fitness, energy and wellbeing",
+      "Friendly competition with clear goals and progression",
+      "Team spirit and pride when representing the squadron",
+    ],
     image: IMG("fun-go-karting-team-photo.jpg"),
     gallery: [
       { src: IMG("fun-go-karting-brief.jpg"), caption: "The safety brief" },
@@ -222,6 +323,34 @@ export const ACTIVITIES = [
   },
   {
     slug: "camps", title: "Camps", icon: TentTree,
+    strapline: "Step beyond parade nights into unforgettable camps.",
+    quickFacts: ["Multi-day cadet experiences", "Team living and shared routines", "Subject to place allocation"],
+    whatToExpect: [
+      "A packed timetable of activities with cadets from wider areas",
+      "New environments that develop confidence away from home",
+      "Strong friendships and standout moments across the week",
+    ],
+    text: "Cadets may attend multi-day camps that develop independence, teamwork and confidence.",
+    long: [
+      "Camps are some of the most memorable experiences in cadet life, giving young people the chance to train, socialise and take on new challenges over several days.",
+      "Places are subject to availability, eligibility and RAFAC procedures.",
+    ],
+    highlights: [
+      "Attend multi-day camps where available",
+      "Develop independence away from home",
+      "Make friends and memories beyond the squadron",
+      "Take on new challenges away from home",
+    ],
+  },
+  {
+    slug: "raf-station-visits", title: "RAF Station Visits", icon: Plane,
+    strapline: "Step onto active RAF stations and see operations up close.",
+    quickFacts: ["Operational RAF environments", "Guided tours and aircraft access", "Aviation and careers inspiration"],
+    whatToExpect: [
+      "Visiting working RAF stations with squadron staff supervision",
+      "Seeing aircraft and engineering environments up close",
+      "Learning directly from RAF personnel and subject specialists",
+    ],
     image: IMG("raf_station_visits/raf-station-visit-bbmf-group-photo.jpg"),
     gallery: [
       { src: IMG("raf_station_visits/raf-station-visit-bbmf-group-photo.jpg"), caption: "Group photo at a station visit" },
@@ -231,23 +360,61 @@ export const ACTIVITIES = [
       { src: IMG("raf_station_visits/raf-station-visit-1-tour-round-a-typhoon-by-raf-pilot.jpg"), caption: "A tour of the Typhoon with an RAF pilot" },
       { src: IMG("raf_station_visits/raf-station-visit-2-bbmf-spitfire.jpg"), caption: "BBMF Spitfire" },
       { src: IMG("raf_station_visits/raf-station-visit-2-bbmf-lancaster.jpg"), caption: "BBMF Lancaster" },
-      { src: IMG("air_shows/cosford airshow 4 - access all areas.jpg"), caption: "Air show access-all-areas experience" },
-      { src: IMG("air_shows/riat (4).JPG"), caption: "Cadets at RIAT" },
     ],
-    text: "Cadets may attend camps and visits, including activities at RAF stations where available.",
+    text: "RAF station visits let cadets experience frontline aviation, heritage aircraft and station life first-hand.",
     long: [
-      "Camps and visits are some of the most memorable experiences cadets can have, including activities and stays at RAF stations where available.",
-      "Places are subject to availability, eligibility and RAFAC procedures.",
+      "RAF station visits are a highlight for many cadets, offering access to military aviation environments and opportunities to learn from serving personnel.",
+      "These visits connect cadet training to real-world RAF operations and help inspire future goals in aviation and engineering.",
     ],
     highlights: [
-      "Attend camps and visits where available",
-      "Experience life and activities at RAF stations",
-      "Make friends and memories beyond the squadron",
-      "Take on new challenges away from home",
+      "Visit RAF stations and specialist aviation locations",
+      "See operational and heritage aircraft up close",
+      "Learn from RAF staff and aviation professionals",
+      "Build motivation for future aviation pathways",
+    ],
+  },
+  {
+    slug: "airshows", title: "Airshows", icon: Plane,
+    strapline: "See world-class aircraft and aviation teams up close.",
+    quickFacts: ["Major UK airshow visits", "Aircraft access and static displays", "Aviation inspiration and careers insight"],
+    whatToExpect: [
+      "Experiencing live flying displays from historic and modern aircraft",
+      "Exploring static aircraft, exhibits and interactive aviation areas",
+      "Learning from real RAF and aerospace environments with fellow cadets",
+    ],
+    image: IMG("air_shows/cosford airshow 4 - access all areas.jpg"),
+    gallery: [
+      { src: IMG("air_shows/cosford (1).jpg"), caption: "Cosford airshow visit" },
+      { src: IMG("air_shows/cosford (2).jpg"), caption: "Airshow display line" },
+      { src: IMG("air_shows/cosford (3).jpg"), caption: "Cadets at Cosford" },
+      { src: IMG("air_shows/cosford airshow 4 - access all areas.jpg"), caption: "Air show access-all-areas experience" },
+      { src: IMG("air_shows/riat (1).JPG"), caption: "Cadets at RIAT" },
+      { src: IMG("air_shows/riat (2).JPG"), caption: "Aircraft and air power insight" },
+      { src: IMG("air_shows/riat (3).JPG"), caption: "Airshow day at RIAT" },
+      { src: IMG("air_shows/riat (4).JPG"), caption: "Cadets at RIAT" },
+      { src: IMG("air_shows/riat (5).JPG"), caption: "Flightline atmosphere" },
+    ],
+    text: "Airshow trips bring cadets face-to-face with military aviation, heritage aircraft and aerospace opportunities.",
+    long: [
+      "Airshows are a standout cadet experience, offering the chance to see aircraft, crews and display teams in action at major events.",
+      "From flightline views to static exhibits, these visits help cadets connect classroom aviation knowledge with the real world.",
+    ],
+    highlights: [
+      "Visit major UK airshows such as RIAT and Cosford",
+      "See frontline and historic aircraft up close",
+      "Build aviation knowledge through real environments",
+      "Share an unforgettable day with your squadron",
     ],
   },
   {
     slug: "drill-and-uniform", title: "Drill and Uniform", icon: Shield,
+    strapline: "Build pride, bearing and precision as a cadet.",
+    quickFacts: ["Ceremonial and parade skills", "Uniform standards", "Public representation opportunities"],
+    whatToExpect: [
+      "Drill sessions focused on timing, teamwork and discipline",
+      "Learning how to prepare and wear uniform with pride",
+      "Parades and events where cadets represent the squadron",
+    ],
     image: IMG("parade-1-confirmation-of-the-king-1.jpg"),
     gallery: [
       { src: IMG("parade-1-confirmation-of-the-king-1.jpg"), caption: "On parade" },
@@ -273,16 +440,51 @@ export const ACTIVITIES = [
     ],
   },
   {
+    slug: "classification-training", title: "Classification Training", icon: GraduationCap,
+    strapline: "Progress through the cadet syllabus and grow your aviation knowledge.",
+    quickFacts: ["Structured training levels", "Classroom and practical learning", "Supports cadet badge progression"],
+    whatToExpect: [
+      "Lessons that build understanding step-by-step across key topics",
+      "Interactive sessions on propulsion, principles of flight and aviation systems",
+      "Clear progression milestones as confidence and knowledge grow",
+    ],
+    image: IMG("classification_training/training - propulsion.jpg"),
+    gallery: [
+      { src: IMG("classification_training/training - propulsion.jpg"), caption: "Classification training: propulsion" },
+      { src: IMG("classification_training/training - propulsion 2.jpg"), caption: "Classification lesson" },
+      { src: IMG("classification_training/20250607_120534.jpg"), caption: "Classroom session" },
+      { src: IMG("classification_training/20250607_120541.jpg"), caption: "Cadets in instruction" },
+      { src: IMG("classification_training/20250607_120544.jpg"), caption: "Learning as a team" },
+      { src: IMG("classification_training/Screenshot 2025-05-21 194351.png"), caption: "Training content and study resources" },
+      { src: IMG("classification_training/Screenshot 2025-05-21 194444.png"), caption: "Classification learning materials" },
+    ],
+    text: "Classification Training develops cadet knowledge across aviation, air power and related subjects through progressive study levels.",
+    long: [
+      "Classification Training gives cadets a clear learning pathway, helping them build technical and aviation knowledge over time.",
+      "As cadets progress, they develop confidence in classroom learning, practical understanding and wider cadet syllabus achievement.",
+    ],
+    highlights: [
+      "Progress through structured classification levels",
+      "Build strong aviation and air power knowledge",
+      "Support wider cadet development and badges",
+      "Develop confidence in study and presentation skills",
+    ],
+  },
+  {
     slug: "aviation-studies", title: "Aviation Studies", icon: BookOpen,
+    strapline: "Turn aviation curiosity into real technical knowledge.",
+    quickFacts: ["Flight principles and air power topics", "Classroom + practical blend", "Supports cadet syllabus progression"],
+    whatToExpect: [
+      "Interactive learning on aircraft systems and aerodynamics",
+      "Navigation and aviation theory linked to cadet badges",
+      "Applied learning through simulators, STEM and visits",
+    ],
     image: IMG("flight_sim/flight-sim-1.jpg"),
     gallery: [
       { src: IMG("flight_sim/flight-sim-1.jpg"), caption: "On the flight simulator" },
       { src: IMG("flight_sim/flight-sim-2.jpg"), caption: "Learning the controls" },
       { src: IMG("flight_sim/flight-sim-3.jpg"), caption: "Putting theory into practice" },
       { src: IMG("careeers-days/careers-day-at-mbda.jpg"), caption: "Careers day at MBDA" },
-      { src: IMG("classification_training/training - propulsion.jpg"), caption: "Classification training: propulsion" },
-      { src: IMG("classification_training/training - propulsion 2.jpg"), caption: "Classification lesson" },
-      { src: IMG("classification_training/20250607_120541.jpg"), caption: "Classroom instruction" },
       { src: IMG("stem/20260510_114429.jpg"), caption: "STEM activity" },
       { src: IMG("stem/20260510_135743.jpg"), caption: "Hands-on STEM learning" },
       { src: IMG("air_shows/cosford (1).jpg"), caption: "Aviation learning at an air show" },
@@ -302,6 +504,13 @@ export const ACTIVITIES = [
   },
   {
     slug: "community-events", title: "Community Events", icon: HeartHandshake,
+    strapline: "Make a difference while wearing the squadron badge.",
+    quickFacts: ["Parades and remembrance events", "Fundraising and local support", "Visible public-facing role"],
+    whatToExpect: [
+      "Representing the squadron at meaningful civic occasions",
+      "Supporting charity and community causes as a team",
+      "Building pride, confidence and a sense of service",
+    ],
     image: IMG("poppy-appeal-collecting.jpg"),
     gallery: [
       { src: IMG("poppy-appeal-collecting.jpg"), caption: "Collecting for the Poppy Appeal" },

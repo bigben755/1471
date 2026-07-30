@@ -80,3 +80,11 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/frontend/public/squadron/overseas/20260527_180032.mp4
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
+frontend/node_modules/.cache/default-development/20.pack
+frontend/public/squadron/overseas/20260527_180032.mp4

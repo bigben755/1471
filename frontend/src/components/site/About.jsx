@@ -1,6 +1,30 @@
 import { ABOUT_CARDS, ABOUT_IMG } from "../../data/content";
 import { Reveal, SectionHeading } from "./Reveal";
 import { Roundel } from "./Motifs";
+import { Compass, Shield, Users, Rocket } from "lucide-react";
+
+const HOW_IT_WORKS = [
+  {
+    title: "Join and settle in",
+    text: "New cadets are introduced to parade nights, routines and expectations in a supportive environment.",
+    icon: Users,
+  },
+  {
+    title: "Train and develop",
+    text: "Cadets progress through structured training, learning practical and leadership skills step by step.",
+    icon: Compass,
+  },
+  {
+    title: "Take on challenges",
+    text: "From fieldcraft to first aid and aviation, cadets apply learning in real activities and team settings.",
+    icon: Rocket,
+  },
+  {
+    title: "Progress and lead",
+    text: "As confidence grows, cadets can take on responsibility, support others and work towards recognised milestones.",
+    icon: Shield,
+  },
+];
 
 export const About = () => (
   <section id="about" data-testid="about-section" className="relative py-20 md:py-28 bg-white topo-lines">
@@ -56,6 +80,40 @@ export const About = () => (
           </Reveal>
         ))}
       </div>
+
+      <div className="mt-16 md:mt-20">
+        <Reveal>
+          <SectionHeading
+            eyebrow="How it works"
+            title="A clear path from joining to progression"
+            intro="Cadet development is structured so young people can build skills and confidence in manageable steps."
+          />
+        </Reveal>
+
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {HOW_IT_WORKS.map((item, i) => (
+            <Reveal key={item.title} delay={i * 0.06}>
+              <div className="h-full bg-white border border-raf-sky p-6">
+                <div className="w-11 h-11 flex items-center justify-center bg-raf-blue text-white">
+                  <item.icon size={20} />
+                </div>
+                <h3 className="mt-4 font-display text-lg font-bold text-raf-navy">{item.title}</h3>
+                <p className="mt-2 text-sm text-raf-slate leading-relaxed">{item.text}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+
+      <Reveal delay={0.12}>
+        <div className="mt-12 border border-raf-sky bg-raf-sky/40 p-7 md:p-9">
+          <h3 className="font-display text-2xl font-bold text-raf-navy">What makes cadet life different?</h3>
+          <p className="mt-4 text-raf-slate leading-relaxed">
+            Cadet life combines structure and adventure. Young people are expected to show commitment and teamwork,
+            while being supported to try new experiences that build independence, resilience and pride.
+          </p>
+        </div>
+      </Reveal>
     </div>
   </section>
 );
