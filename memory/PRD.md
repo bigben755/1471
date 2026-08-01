@@ -100,9 +100,18 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 ## Backlog / tech debt (open, prioritised)
 
 ## Email — switched to Resend — 2026-06-21
-- **Resend is now the primary email sender.** `send_email()` (server.py) prefers Resend (`asyncio.to_thread(resend.Emails.send, ...)`) when `RESEND_API_KEY` is set, else falls back to the Emergent managed proxy. From address = `EMAIL_FROM_NAME <SENDER_EMAIL>` = `1471 Horwich Squadron <noreply@1471squadron.co.uk>` (domain `1471squadron.co.uk` is verified in Resend, sending+receiving enabled). `reply_to` = enquiry sender / NOTIFY_EMAIL as appropriate. `email_configured` flag now `bool(RESEND_API_KEY or EMERGENT_EMAIL_KEY)`.
-- Verified: direct Resend API test send returned an id; app enquiry POST triggered send_email with no failures. resend SDK v2.32.2.
-- NOTE: inbound "receiving" (parsing replies into the app) is NOT implemented — would need Resend inbound webhooks. Replies currently land in the reply-to mailbox only.
+- **Resend is now the primary email sender.** `send_email(to, subject, html, reply_to, from_email, from_name)` (server.py) prefers Resend (`asyncio.to_thread(resend.Emails.send, ...)`) when `RESEND_API_KEY` is set, else falls back to the Emergent managed proxy. Display name = `EMAIL_FROM_NAME` ("1471 Horwich Squadron"); mailbox chosen per email type/sender. Domain `1471squadron.co.uk` verified in Resend (sending+receiving). `email_configured` = `bool(RESEND_API_KEY or EMERGENT_EMAIL_KEY)`.
+- **Context-aware "from" addresses** (all `@1471squadron.co.uk`, via `mailbox()` helper + `staff_from_email()`):
+  - Enquiry notifications → `admin@` (reply-to = enquirer)
+  - Recruitment joining-instructions + countdown emails → `enrolments@` (reply-to = enrolments@)
+  - SMS password-reset support email → `admin@`
+  - Staff broadcasts / notices / documents / newsletters → sender's **appointment mailbox** if held (training_officer→trainingofficer@, adjutant→adjutant@, stores_officer→stores@, community_officer→community@, health_safety_officer→healthsafety@), else `admin@`. `deliver_broadcast()` gained a `from_email` param.
+  - (`oc@` reserved for a future true "welcome on join" email — no call site yet.)
+- Verified: direct Resend sends for admin@/enrolments@/trainingofficer@/oc@ all returned 200; enquiry POST + admin broadcast run clean, no errors. resend SDK v2.32.2.
+- NOTE: inbound "receiving" into the app is NOT implemented (needs Resend inbound webhooks). Replies land in the reply-to mailbox only — matches user's request.
+
+## Notifications toggle on Account page — 2026-06-21
+- `AccountPanel.jsx` gained a **Notifications** card (`notifications-card`) with an on/off switch (`notifications-toggle`) + status (`notifications-status`). States: on/off/blocked/ios/unsupported. Uses `enablePush()` + new `disablePush()` in `pwa.js` (local unsubscribe + `POST /api/push/unsubscribe`, clears badge). Verified renders; degrades to "blocked" in headless.
 
 
 - P1: Event photo galleries (object storage); parents view photos.

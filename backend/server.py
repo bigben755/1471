@@ -54,6 +54,21 @@ EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMERGENT_EMAIL_KEY = os.environ.get('EMERGENT_EMAIL_KEY', '').strip()
 EMAIL_FROM_NAME = os.environ.get('EMAIL_FROM_NAME', '1471 Horwich Squadron')
 
+# Sending mailboxes on the verified domain (Resend). The local part is chosen
+# per email type / sender role so recipients see who it's from.
+EMAIL_DOMAIN = os.environ.get('EMAIL_DOMAIN', '1471squadron.co.uk')
+APPOINTMENT_MAILBOX = {
+    "training_officer": "trainingofficer",
+    "adjutant": "adjutant",
+    "stores_officer": "stores",
+    "community_officer": "community",
+    "health_safety_officer": "healthsafety",
+}
+
+
+def mailbox(local: str) -> str:
+    return f"{local}@{EMAIL_DOMAIN}"
+
 AGE_BANDS = {
     "under_12": "12 and under",
     "yr7_starting_yr8": "In Year 7, starting Year 8 in September",
@@ -148,6 +163,16 @@ async def _user_appointments(user_id: str) -> List[str]:
     app_doc = await _appointments_doc()
     v = app_doc.get("value", {})
     return [k for k in APPOINTMENT_KEYS if v.get(k) == user_id]
+
+
+async def staff_from_email(staff: dict) -> str:
+    """Pick the sending mailbox for a staff member: their appointment mailbox
+    if they hold one, otherwise the site admin mailbox."""
+    apps = await _user_appointments(staff.get("id", ""))
+    for k in APPOINTMENT_KEYS:
+        if k in apps and k in APPOINTMENT_MAILBOX:
+            return mailbox(APPOINTMENT_MAILBOX[k])
+    return mailbox("admin")
 
 
 async def compute_member_stats(user_id: str) -> dict:
@@ -464,14 +489,18 @@ def _newsletter_email_html(nl: dict, attachments: Optional[list] = None, base_ur
     return _email_shell(nl.get("heading") or nl.get("subject", "Squadron newsletter"), "".join(parts))
 
 
-async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] = None) -> str:
+async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] = None,
+                     from_email: Optional[str] = None, from_name: Optional[str] = None) -> str:
     """Send one email. Prefers Resend (own domain); falls back to the managed proxy.
+    `from_email` sets the sending mailbox; defaults to SENDER_EMAIL.
     Returns 'sent' | 'skipped' | 'failed'."""
+    sender = from_email or SENDER_EMAIL
+    name = from_name or EMAIL_FROM_NAME
     # Preferred: Resend (user's own verified domain)
     if RESEND_API_KEY and resend is not None:
         resend.api_key = RESEND_API_KEY
         params = {
-            "from": f"{EMAIL_FROM_NAME} <{SENDER_EMAIL}>",
+            "from": f"{name} <{sender}>",
             "to": [to],
             "subject": subject,
             "html": html,
@@ -488,7 +517,7 @@ async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] =
     if not EMERGENT_EMAIL_KEY:
         logger.info("Email not configured; skipped send to %s", to)
         return "skipped"
-    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    payload = {"to": [to], "subject": subject, "html": html, "from_name": name}
     if reply_to:
         payload["contact_email"] = reply_to
     try:
@@ -504,7 +533,7 @@ async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] =
 
 async def send_enquiry_email(e: Enquiry) -> None:
     await send_email(NOTIFY_EMAIL, f"New {e.enquiry_type} enquiry - {e.name}",
-                     _enquiry_email_html(e), reply_to=e.email)
+                     _enquiry_email_html(e), reply_to=e.email, from_email=mailbox("admin"))
 
 
 # ---------------------------------------------------------------------------
@@ -667,14 +696,15 @@ async def send_recruit_email(e: dict, kind: Optional[str], note: str,
     if k == "joining":
         status = await send_email(e["email"], "Joining 1471 Horwich Squadron \u2014 here's how",
                                   _joining_instructions_html(first, note, attachments, base_url),
-                                  reply_to=NOTIFY_EMAIL)
+                                  reply_to=mailbox("enrolments"), from_email=mailbox("enrolments"))
         target = None
     else:
         target = eligible_date(e)
         if not target:
             return {"sent": False, "error": "no_date"}
         status = await send_email(e["email"], "Not long until you can join 1471 Horwich Squadron!",
-                                  _countdown_html(first, target, note), reply_to=NOTIFY_EMAIL)
+                                  _countdown_html(first, target, note),
+                                  reply_to=mailbox("enrolments"), from_email=mailbox("enrolments"))
     set_fields = {"last_recruit_email": {"kind": k, "at": now_iso(), "status": status}}
     if status == "sent":
         set_fields["status"] = "actioned"
@@ -706,14 +736,14 @@ async def resolve_recipients(a: Audience) -> List[dict]:
 async def deliver_broadcast(users: List[dict], title: str, body: str, channels: List[str],
                             from_name: str, kind: str, email_html: Optional[str] = None,
                             link: Optional[str] = None, link_label: Optional[str] = None,
-                            links: Optional[List[dict]] = None) -> dict:
+                            links: Optional[List[dict]] = None, from_email: Optional[str] = None) -> dict:
     channels = [c for c in channels if c in ("dashboard", "email")] or ["dashboard"]
     docs, emails_sent = [], 0
     for u in users:
         email_status = "n/a"
         if "email" in channels and u.get("email"):
             html = email_html or _broadcast_email_html(title, body, from_name)
-            email_status = await send_email(u["email"], title, html)
+            email_status = await send_email(u["email"], title, html, from_email=from_email)
             if email_status == "sent":
                 emails_sent += 1
         if "dashboard" in channels:
@@ -1043,13 +1073,15 @@ async def send_document(document_id: str, payload: DocumentSend, staff: dict = D
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
+    from_email = await staff_from_email(staff)
     abs_link = f"{payload.base_url}/api/documents/{document_id}/download"
     rel_link = f"/api/documents/{document_id}/download"
     title = f"Document: {doc['title']}"
     body = (payload.message + "\n\n" if payload.message else "") + f"{doc['title']} ({doc['filename']})"
     email_html = _document_email_html(doc["title"], payload.message, abs_link, from_name)
     result = await deliver_broadcast(users, title, body, payload.channels, from_name, "document",
-                                     email_html=email_html, link=rel_link, link_label="Download document")
+                                     email_html=email_html, link=rel_link, link_label="Download document",
+                                     from_email=from_email)
     return result
 
 
@@ -2255,6 +2287,7 @@ async def sms_support_request(payload: SmsResetRequestCreate, user: dict = Depen
         f"SMS password reset request - {requester_name}",
         _sms_reset_email_html(requester_name, user.get("email", ""), note),
         reply_to=user.get("email", "") or None,
+        from_email=mailbox("admin"),
     )
     thread["email_status"] = email_status
     await db.sms_support_threads.insert_one(thread)
@@ -2361,6 +2394,7 @@ async def create_broadcast(payload: BroadcastCreate, staff: dict = Depends(requi
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
+    from_email = await staff_from_email(staff)
     attachments = await _fetch_attachments(payload.attachment_ids)
     attach_note = ""
     if attachments:
@@ -2379,6 +2413,7 @@ async def create_broadcast(payload: BroadcastCreate, staff: dict = Depends(requi
         link=links[0]["url"] if links else None,
         link_label=links[0]["label"] if links else None,
         links=links,
+        from_email=from_email,
     )
     await db.broadcasts.insert_one({
         "id": str(uuid.uuid4()), "title": payload.title, "body": payload.body,
@@ -2529,6 +2564,7 @@ async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: di
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = nl.get("created_by") or "Squadron Staff"
+    from_email = await staff_from_email(staff)
     attachments = await _fetch_attachments(nl.get("attachment_ids") or [])
     attach_note = ""
     if attachments:
@@ -2542,7 +2578,7 @@ async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: di
                                      from_name, "newsletter", email_html=email_html,
                                      link=links[0]["url"] if links else None,
                                      link_label=links[0]["label"] if links else None,
-                                     links=links)
+                                     links=links, from_email=from_email)
     await db.newsletters.update_one({"id": newsletter_id},
                                     {"$set": {"status": "sent", "sent_at": now_iso(),
                                               "audience": payload.audience.model_dump(),

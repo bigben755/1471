@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
 import { useAuth } from "../../context/AuthContext";
-import { Loader2, KeyRound } from "lucide-react";
+import { Loader2, KeyRound, Bell, BellOff } from "lucide-react";
+import { enablePush, disablePush, pushSupported, isStandalone, isIOS } from "../../pwa";
 
 export const AccountPanel = () => {
   const { user } = useAuth();
@@ -50,6 +51,88 @@ export const AccountPanel = () => {
           </button>
         </form>
       </div>
+
+      <NotificationsCard />
+    </div>
+  );
+};
+
+const NotificationsCard = () => {
+  const [status, setStatus] = useState("checking"); // on | off | blocked | unsupported | ios | checking
+  const [busy, setBusy] = useState(false);
+
+  const detect = async () => {
+    if (!pushSupported()) {
+      setStatus(isIOS() && !isStandalone() ? "ios" : "unsupported");
+      return;
+    }
+    if (typeof Notification !== "undefined" && Notification.permission === "denied") { setStatus("blocked"); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setStatus(sub && Notification.permission === "granted" ? "on" : "off");
+    } catch (e) { setStatus("off"); }
+  };
+
+  useEffect(() => { detect(); }, []);
+
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      if (status === "on") {
+        const res = await disablePush();
+        if (res.ok) { toast.success("Notifications turned off."); setStatus("off"); }
+        else toast.error("Couldn't turn off notifications.");
+      } else {
+        const res = await enablePush();
+        if (res.ok) { toast.success("Notifications on — you'll be alerted here and on your device."); setStatus("on"); }
+        else if (res.reason === "denied") { toast.error("Notifications are blocked. Allow them in your browser settings."); setStatus("blocked"); }
+        else if (res.reason === "disabled") toast.error("Push isn't configured on the server yet.");
+        else if (res.reason === "unsupported") toast.error("This device or browser doesn't support notifications.");
+        else toast.error("Couldn't turn on notifications. If you're in private browsing, try a normal window.");
+      }
+    } finally { setBusy(false); }
+  };
+
+  const on = status === "on";
+  const canToggle = status === "on" || status === "off";
+
+  return (
+    <div data-testid="notifications-card" className="bg-white border border-white p-6 mt-6">
+      <h3 className="font-display font-bold text-raf-navy mb-1 flex items-center gap-2">
+        {on ? <Bell size={18} /> : <BellOff size={18} />} Notifications
+      </h3>
+      <p className="text-sm text-raf-slate mb-4">Get push alerts on this device for new events, notices and messages — even when the app is closed.</p>
+
+      {status === "checking" && <div className="flex items-center gap-2 text-sm text-raf-slate"><Loader2 className="animate-spin" size={16} /> Checking…</div>}
+
+      {canToggle && (
+        <div className="flex items-center justify-between gap-4">
+          <span data-testid="notifications-status" className={`text-sm font-medium ${on ? "text-green-700" : "text-raf-slate"}`}>
+            {on ? "On — you're all set" : "Off"}
+          </span>
+          <button
+            data-testid="notifications-toggle"
+            onClick={toggle}
+            disabled={busy}
+            role="switch"
+            aria-checked={on}
+            className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${on ? "bg-raf-blue" : "bg-raf-sky"}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${on ? "translate-x-6" : "translate-x-1"}`} />
+          </button>
+        </div>
+      )}
+
+      {status === "blocked" && (
+        <p data-testid="notifications-status" className="text-sm text-raf-red">Notifications are blocked in your browser. To turn them on, allow notifications for this site in your browser settings, then reload.</p>
+      )}
+      {status === "ios" && (
+        <p data-testid="notifications-status" className="text-sm text-raf-slate">On iPhone/iPad, first add this app to your Home Screen (Share → Add to Home Screen), then open it from there to enable notifications.</p>
+      )}
+      {status === "unsupported" && (
+        <p data-testid="notifications-status" className="text-sm text-raf-slate">This device or browser doesn't support push notifications.</p>
+      )}
     </div>
   );
 };

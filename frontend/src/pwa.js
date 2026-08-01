@@ -37,6 +37,22 @@ export async function enablePush() {
   }
 }
 
+export async function disablePush() {
+  if (!pushSupported()) return { ok: false, reason: "unsupported" };
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      try { await api.post("/push/unsubscribe", { subscription: sub.toJSON() }); } catch (e) { /* ignore */ }
+      await sub.unsubscribe();
+    }
+    if (navigator.clearAppBadge) { try { await navigator.clearAppBadge(); } catch (e) { /* ignore */ } }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: "error" };
+  }
+}
+
 export async function refreshBadge() {
   if (!("setAppBadge" in navigator)) return;
   try {
