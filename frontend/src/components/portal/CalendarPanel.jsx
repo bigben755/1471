@@ -2,13 +2,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { useAuth } from "../../context/AuthContext";
-import { Calendar, UpcomingList } from "./Calendar";
+import { Calendar, UpcomingList, Agenda } from "./Calendar";
 import { EventDialog } from "./EventDialog";
 import { PanelHeading } from "./PortalShell";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "../ui/dialog";
-import { Plus, Loader2, Trash2, CalendarPlus, Upload, X, FileText } from "lucide-react";
+import { Plus, Loader2, Trash2, CalendarPlus, Upload, X, FileText, List, LayoutGrid } from "lucide-react";
 
 const ICS_URL = `${process.env.REACT_APP_BACKEND_URL}/api/calendar/events.ics`;
 
@@ -201,6 +201,9 @@ export const CalendarPanel = ({ canManage }) => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [view, setView] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth >= 640 ? "month" : "agenda"
+  );
 
   const load = useCallback(async () => {
     try {
@@ -230,6 +233,22 @@ export const CalendarPanel = ({ canManage }) => {
         intro={canManage ? "Create events, manage bids and mark attendance." : "Tap an event to see details" + (user?.role === "cadet" ? " and bid for a place." : ".")}
         action={
           <div className="flex flex-wrap gap-2">
+            <div className="inline-flex border border-raf-sky rounded-none overflow-hidden" data-testid="calendar-view-toggle">
+              <button
+                data-testid="view-agenda"
+                onClick={() => setView("agenda")}
+                className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold transition-colors ${view === "agenda" ? "bg-raf-blue text-white" : "bg-white text-raf-navy hover:bg-raf-sky"}`}
+              >
+                <List size={16} /> List
+              </button>
+              <button
+                data-testid="view-month"
+                onClick={() => setView("month")}
+                className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-semibold transition-colors ${view === "month" ? "bg-raf-blue text-white" : "bg-white text-raf-navy hover:bg-raf-sky"}`}
+              >
+                <LayoutGrid size={16} /> Grid
+              </button>
+            </div>
             <button data-testid="subscribe-ics-button" onClick={subscribe} className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-blue text-raf-blue hover:bg-raf-blue hover:text-white transition-colors text-sm font-semibold">
               <CalendarPlus size={17} /> Subscribe
             </button>
@@ -250,8 +269,14 @@ export const CalendarPanel = ({ canManage }) => {
         <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>
       ) : (
         <>
-          <Calendar events={events} onSelect={openEvent} />
-          <UpcomingList events={events} onSelect={openEvent} />
+          {view === "agenda" ? (
+            <Agenda events={events} onSelect={openEvent} />
+          ) : (
+            <>
+              <Calendar events={events} onSelect={openEvent} />
+              <UpcomingList events={events} onSelect={openEvent} />
+            </>
+          )}
         </>
       )}
 

@@ -101,6 +101,77 @@ export const Calendar = ({ events, onSelect }) => {
   );
 };
 
+const BAR = {
+  green: "bg-emerald-500",
+  amber: "bg-amber-400",
+  red: "bg-raf-red",
+};
+const STATUS = { green: "Open", amber: "Filling up", red: "Full" };
+
+export const Agenda = ({ events, onSelect }) => {
+  const now = new Date(new Date().toDateString());
+  const list = [...events]
+    .filter((e) => new Date(e.start) >= now)
+    .sort((a, b) => new Date(a.start) - new Date(b.start));
+
+  if (list.length === 0) {
+    return (
+      <div data-testid="agenda" className="bg-white border border-white p-10 text-center text-raf-slate text-sm">
+        No upcoming events yet — check back soon.
+      </div>
+    );
+  }
+
+  const groups = [];
+  list.forEach((e) => {
+    const d = new Date(e.start);
+    const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    let g = groups.find((x) => x.label === label);
+    if (!g) { g = { label, items: [] }; groups.push(g); }
+    g.items.push(e);
+  });
+
+  return (
+    <div data-testid="agenda" className="bg-white border border-white divide-y divide-raf-sky/60">
+      {groups.map((g) => (
+        <div key={g.label}>
+          <div className="px-4 py-2 bg-raf-sky/40 text-[11px] uppercase tracking-wide font-bold text-raf-navy sticky top-16 z-10">
+            {g.label}
+          </div>
+          {g.items.map((e) => {
+            const d = new Date(e.start);
+            return (
+              <button
+                key={e.id}
+                data-testid={`agenda-event-${e.id}`}
+                onClick={() => onSelect(e)}
+                className="w-full flex items-stretch gap-3 px-4 py-3 text-left hover:bg-raf-sky/20 active:bg-raf-sky/30 transition-colors"
+              >
+                <div className="flex flex-col items-center justify-center w-11 shrink-0">
+                  <span className="text-[10px] uppercase text-raf-slate leading-none">{d.toLocaleDateString("en-GB", { weekday: "short" })}</span>
+                  <span className="text-2xl font-display font-extrabold text-raf-navy leading-tight">{d.getDate()}</span>
+                </div>
+                <span className={`w-1.5 rounded-full shrink-0 ${BAR[e.colour]}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-raf-navy truncate flex items-center gap-1">
+                    {e.event_type === "premium" && <Star size={13} className="text-amber-500 shrink-0" />}
+                    {e.title}
+                  </div>
+                  <div className="text-xs text-raf-slate mt-0.5 truncate">
+                    {d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                    {e.location ? ` · ${e.location}` : ""}
+                  </div>
+                </div>
+                <span className={`self-center text-[10px] uppercase px-2 py-0.5 shrink-0 ${COLOUR[e.colour]}`}>{STATUS[e.colour]}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export const UpcomingList = ({ events, onSelect }) => {
   const upcoming = events
     .filter((e) => new Date(e.start) >= new Date(new Date().toDateString()))

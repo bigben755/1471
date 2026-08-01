@@ -23,6 +23,13 @@ export const Header = () => {
     return () => { document.body.style.overflow = ""; };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   // Solid header everywhere except the top of the home page (transparent over hero).
   const solid = scrolled || !isHome;
 
@@ -32,6 +39,7 @@ export const Header = () => {
   };
 
   return (
+    <>
     <header
       data-testid="site-header"
       className={`${isHome ? "fixed" : "sticky"} top-0 inset-x-0 z-50 transition-all duration-300 ${
@@ -102,16 +110,38 @@ export const Header = () => {
           </button>
         </div>
       </div>
+      </header>
 
-      {/* Mobile drawer */}
+      {/* Backdrop */}
+      <div
+        data-testid="mobile-menu-backdrop"
+        onClick={() => setOpen(false)}
+        aria-hidden="true"
+        className={`lg:hidden fixed inset-0 z-[60] bg-raf-navy/60 backdrop-blur-sm transition-opacity duration-300 ${
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      />
+
+      {/* Mobile drawer — slide-in panel */}
       <div
         data-testid="mobile-menu"
-        className={`lg:hidden fixed inset-0 top-[68px] bg-raf-navy transition-transform duration-300 ${
+        className={`lg:hidden fixed top-0 right-0 bottom-0 z-[70] w-[84%] max-w-xs bg-raf-navy shadow-2xl overflow-y-auto transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <div className="route-lines absolute inset-0 opacity-40" />
-        <Roundel className="absolute -right-16 -bottom-16 w-64 h-64 opacity-10" />
+        <div className="route-lines absolute inset-0 opacity-40 pointer-events-none" />
+        <Roundel className="absolute -right-16 -bottom-16 w-64 h-64 opacity-10 pointer-events-none" />
+        <div className="relative flex items-center justify-between px-6 h-[68px] border-b border-white/10">
+          <span className="text-raf-sky text-[11px] uppercase tracking-[0.2em] font-semibold">Menu</span>
+          <button
+            data-testid="mobile-menu-close"
+            onClick={() => setOpen(false)}
+            aria-label="Close menu"
+            className="p-2 -mr-2 text-white hover:text-raf-red transition-colors"
+          >
+            <X size={26} />
+          </button>
+        </div>
         <nav className="relative flex flex-col p-6 gap-1">
           {NAV_ITEMS.map((item) => (
             <button
@@ -138,6 +168,6 @@ export const Header = () => {
           </button>
         </nav>
       </div>
-    </header>
+    </>
   );
 };
