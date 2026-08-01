@@ -98,6 +98,13 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - Caveat: iPhone/iPad need Add-to-Home-Screen (iOS 16.4+) before push works. Real push delivery can't be validated in headless automation (Chromium treats Push as incognito) — wiring verified at API layer.
 
 ## Backlog / tech debt (open, prioritised)
+
+## Email — switched to Resend — 2026-06-21
+- **Resend is now the primary email sender.** `send_email()` (server.py) prefers Resend (`asyncio.to_thread(resend.Emails.send, ...)`) when `RESEND_API_KEY` is set, else falls back to the Emergent managed proxy. From address = `EMAIL_FROM_NAME <SENDER_EMAIL>` = `1471 Horwich Squadron <noreply@1471squadron.co.uk>` (domain `1471squadron.co.uk` is verified in Resend, sending+receiving enabled). `reply_to` = enquiry sender / NOTIFY_EMAIL as appropriate. `email_configured` flag now `bool(RESEND_API_KEY or EMERGENT_EMAIL_KEY)`.
+- Verified: direct Resend API test send returned an id; app enquiry POST triggered send_email with no failures. resend SDK v2.32.2.
+- NOTE: inbound "receiving" (parsing replies into the app) is NOT implemented — would need Resend inbound webhooks. Replies currently land in the reply-to mailbox only.
+
+
 - P1: Event photo galleries (object storage); parents view photos.
 - P1: Facebook auto-post option (needs Meta Page token) — currently simple share only.
 - P2 (tech debt, cumulative iters 3–7): **split server.py (~1680 lines) into routers (overdue; push/blogs/documents/calendar cleanly extractable)**; StreamingResponse for GridFS downloads; nested pydantic schema for PushSubscription (clean 422); cap push_subscriptions per user (~10, LRU); asyncio.gather fan-out for push sends; BlogUpdate partial model; orphaned-GridFS cleanup; pagination on /public/blogs; zoneinfo('Europe/London') for school-year cutoff; RecruitmentPanel bulk-countdown window.confirm → dialog; return 201 from POST creators.

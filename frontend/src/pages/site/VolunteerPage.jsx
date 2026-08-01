@@ -5,8 +5,8 @@ export default function VolunteerPage() {
   return (
     <div data-testid="volunteer-page">
       <Seo
-        title="Volunteer | 1471 Horwich Squadron RAF Air Cadets"
-        description="Become an adult volunteer with 1471 Horwich Squadron RAF Air Cadets through uniformed, civilian instructor or committee pathways, with role guidance, induction and ongoing development opportunities."
+        title="Volunteer with 1471 Horwich Squadron RAF Air Cadets"
+        description="Support young people as a uniformed volunteer, civilian instructor or committee member at 1471 Horwich Squadron, with clear induction and ongoing development."
       />
       <Volunteer />
     </div>

@@ -40,8 +40,8 @@ export default function Home() {
   return (
     <div data-testid="home-page">
       <Seo
-        title="1471 Horwich Squadron RAF Air Cadets | Horwich Air Cadets"
-        description="Join 1471 Horwich Squadron RAF Air Cadets in Horwich. Explore flying, adventure, overseas camp, RAF station visits, airshows, leadership, first aid, DofE and youth development pathways, plus adult volunteer opportunities."
+        title="1471 Horwich Squadron RAF Air Cadets | Horwich"
+        description="Join 1471 Horwich Squadron RAF Air Cadets for ages 12 to 17, serving Horwich, Westhoughton, Adlington, Blackrod and Lostock with flying, DofE and camps."
       />
       <Hero />
 
@@ -55,22 +55,28 @@ export default function Home() {
             />
           </Reveal>
 
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-6">
+          <div className="mt-10 grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 md:gap-6">
             {CARDS.map((c, i) => (
               <Reveal key={c.to} delay={(i % 3) * 0.07}>
                 <button
                   data-testid={`home-card-${c.to.slice(1)}`}
                   onClick={() => navigate(c.to)}
-                  className="group w-full text-left h-full bg-white border border-raf-sky p-7 hover:border-raf-blue hover:shadow-lg transition-all"
+                  className="group w-full text-left h-full bg-white border border-raf-sky hover:border-raf-blue hover:shadow-xl overflow-hidden relative transition-all duration-300"
                 >
-                  <div className="w-12 h-12 flex items-center justify-center bg-raf-blue text-white group-hover:bg-raf-red transition-colors">
-                    <c.icon size={22} />
+                  <div className="absolute top-0 left-0 w-full h-[3px] bg-raf-red origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
+                  <div className="p-4 sm:p-7">
+                    <div className="w-9 h-9 sm:w-12 sm:h-12 flex items-center justify-center bg-raf-blue text-white group-hover:bg-raf-red transition-colors">
+                      <c.icon size={18} />
+                    </div>
+                    <h3 className="mt-3 sm:mt-5 font-display text-[14px] sm:text-xl font-bold text-raf-navy leading-tight">{c.title}</h3>
+                    <p className="hidden sm:block mt-2 text-raf-slate leading-relaxed text-sm">{c.text}</p>
+                    <span className="mt-2 sm:mt-4 inline-flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-sm font-semibold text-raf-red">
+                      <span className="sm:hidden">View</span>
+                      <span className="hidden sm:inline">Read more</span>
+                      <ArrowRight size={11} className="sm:hidden group-hover:translate-x-1 transition-transform" />
+                      <ArrowRight size={15} className="hidden sm:inline group-hover:translate-x-1 transition-transform" />
+                    </span>
                   </div>
-                  <h3 className="mt-5 font-display text-xl font-bold text-raf-navy">{c.title}</h3>
-                  <p className="mt-2 text-raf-slate leading-relaxed text-sm">{c.text}</p>
-                  <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-raf-red">
-                    Read more <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
-                  </span>
                 </button>
               </Reveal>
             ))}
@@ -99,7 +105,65 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="py-16 md:py-20 bg-white">
+      {/* Life at 1471 — 3-panel photo feature */}
+      <section className="bg-raf-navy overflow-hidden" aria-label="Life at 1471 Horwich Squadron">
+        <div className="grid md:grid-cols-3 h-[220px] sm:h-[300px] md:h-[400px]">
+          {[
+            { src: "/squadron/flying/flying-cadets-ready-for-flight.jpg", focus: "object-top",    label: "Flying",    sub: "Take to the skies" },
+            { src: "/squadron/fieldcraft/20260720_190743.jpg",           focus: "object-center", label: "Fieldcraft", sub: "Master outdoor skills" },
+            { src: "/squadron/air_shows/cosford airshow 4 - access all areas.jpg", focus: "object-center", label: "Airshows",  sub: "All-areas access" },
+          ].map((item, i) => (
+            <Reveal key={i} delay={i * 0.07}>
+              <div className="relative h-full overflow-hidden group cursor-default">
+                <img
+                  src={item.src}
+                  alt={item.label}
+                  loading="lazy"
+                  className={`w-full h-full object-cover ${item.focus} group-hover:scale-105 transition-transform duration-700`}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-raf-navy/90 via-raf-navy/30 to-transparent" />
+                <div className="absolute bottom-0 left-0 p-6 md:p-8">
+                  <span className="block text-[9px] uppercase tracking-[0.28em] text-raf-sky mb-1.5">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="font-display text-2xl md:text-3xl font-black text-white leading-tight">{item.label}</h3>
+                  <p className="text-white/70 text-sm mt-1">{item.sub}</p>
+                </div>
+                <div className="absolute top-0 right-0 w-[3px] h-0 bg-raf-red group-hover:h-full transition-all duration-500" />
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* Scrolling photo ticker */}
+      <div className="bg-raf-navy py-3 overflow-hidden border-t border-white/10">
+        <div className="flex animate-marquee gap-2">
+          {[
+            "/squadron/raf_station_visits/raf-station-visit-1-cadet-in-a-typhoon-raf-coningsby.jpg",
+            "/squadron/gliding/gliding-cadet-in-glider.jpg",
+            "/squadron/shooting/shooting (1).jpg",
+            "/squadron/overseas/20260526_131607.jpg",
+            "/squadron/awards/presentation-evening-2.jpg",
+            "/squadron/stem/stem 3 - 1.jpg",
+            "/squadron/adventure_training/adventure_training_images (1).jpg",
+            "/squadron/first_aid/first_aid_images (1).jpg",
+            "/squadron/sport/archery 1.jpg",
+            "/squadron/rememberance/rememberance-parade-1.jpg",
+            "/squadron/air_shows/riat (1).JPG",
+            "/squadron/parades/parade 1 - confirmation of the King 1.jpg",
+          ].flatMap((src, i) => [
+            <div key={`a${i}`} className="shrink-0 w-44 h-24 overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
+              <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+            </div>,
+            <div key={`b${i}`} className="shrink-0 w-44 h-24 overflow-hidden opacity-60 hover:opacity-100 transition-opacity">
+              <img src={src} alt="" loading="lazy" className="w-full h-full object-cover" />
+            </div>,
+          ])}
+        </div>
+      </div>
+
+      <section className="py-16 md:py-20 bg-gradient-to-b from-raf-sky/40 to-white">
         <div className="max-w-7xl mx-auto px-5 md:px-10">
           <Reveal>
             <SectionHeading

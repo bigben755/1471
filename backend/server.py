@@ -12,14 +12,15 @@ import base64
 import logging
 import uuid
 import asyncio
+from calendar import monthrange
 from datetime import datetime, timezone, timedelta, date
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 import jwt
 import bcrypt
 import httpx
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.middleware.cors import CORSMiddleware
@@ -46,6 +47,7 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 NOTIFY_EMAIL = os.environ.get('NOTIFY_EMAIL', ADMIN_EMAIL)
+SMS_RESET_EMAIL = os.environ.get('SMS_RESET_EMAIL', 'oc.1471@rafac.mod.gov.uk').strip()
 
 # Emergent managed email proxy (constant — never read base URL from env)
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
@@ -122,6 +124,32 @@ def require_roles(*roles):
 require_staff = require_roles("admin", "cfav")
 
 
+async def require_privileged_staff(user: dict = Depends(require_staff)) -> dict:
+    if user.get("role") == "cfav" and not bool(user.get("is_uniformed", False)):
+        raise HTTPException(status_code=403, detail="Uniformed CFAV or admin access required")
+    return user
+
+
+APPOINTMENT_KEYS = [
+    "training_officer",
+    "adjutant",
+    "stores_officer",
+    "community_officer",
+    "health_safety_officer",
+]
+
+
+async def _appointments_doc() -> dict:
+    doc = await db.settings.find_one({"key": "appointments"}, {"_id": 0})
+    return doc or {"key": "appointments", "value": {}}
+
+
+async def _user_appointments(user_id: str) -> List[str]:
+    app_doc = await _appointments_doc()
+    v = app_doc.get("value", {})
+    return [k for k in APPOINTMENT_KEYS if v.get(k) == user_id]
+
+
 async def compute_member_stats(user_id: str) -> dict:
     """Points = attended-event points + bonus. Streak = attended volunteer events."""
     events = await db.events.find({"attendees": user_id}, {"_id": 0}).to_list(2000)
@@ -139,7 +167,14 @@ def public_user(u: dict) -> dict:
     return {
         "id": u["id"], "email": u["email"], "role": u["role"],
         "first_name": u.get("first_name", ""), "last_name": u.get("last_name", ""),
+        "is_uniformed": bool(u.get("is_uniformed", False)) if u.get("role") == "cfav" else None,
         "child_ids": u.get("child_ids", []), "bonus_points": int(u.get("bonus_points", 0)),
+        "dofe_level": u.get("dofe_level", "") if u.get("role") == "cadet" else "",
+        "dofe_status": u.get("dofe_status", "") if u.get("role") == "cadet" else "",
+        "btech_pathway": u.get("btech_pathway", "") if u.get("role") == "cadet" else "",
+        "btech_status": u.get("btech_status", "") if u.get("role") == "cadet" else "",
+        "cadet_notes": u.get("cadet_notes", "") if u.get("role") == "cadet" else "",
+        "major_badges": u.get("major_badges", []) if u.get("role") == "cadet" else [],
         "created_at": u.get("created_at"),
     }
 
@@ -166,6 +201,7 @@ class UserCreate(BaseModel):
     first_name: str = Field(..., min_length=1)
     last_name: str = Field(default="")
     role: str
+    is_uniformed: Optional[bool] = None
     password: str = Field(..., min_length=6)
     child_ids: List[str] = []
     model_config = ConfigDict(extra="ignore")
@@ -175,8 +211,66 @@ class UserUpdate(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     role: Optional[str] = None
+    is_uniformed: Optional[bool] = None
     child_ids: Optional[List[str]] = None
     bonus_points: Optional[int] = None
+    dofe_level: Optional[str] = None
+    dofe_status: Optional[str] = None
+    btech_pathway: Optional[str] = None
+    btech_status: Optional[str] = None
+    cadet_notes: Optional[str] = None
+    major_badges: Optional[List[str]] = None
+
+
+class CfavAvailabilityCreate(BaseModel):
+    parade_date: str  # ISO date
+    available: bool = True
+    capabilities: List[str] = []
+    note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class CfavEventIdeaCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    parade_date: Optional[str] = None
+    summary: str = Field(default="", max_length=4000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class CfavSkillMatrixCreate(BaseModel):
+    skills: List[str] = []
+    qualifications: List[str] = []
+    interested_activities: List[str] = []
+    willing_to_support: List[str] = []
+    note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class TrainingPlanSlotUpdate(BaseModel):
+    first_period_activity: str = Field(default="", max_length=300)
+    second_period_activity: str = Field(default="", max_length=300)
+    uniform_needed: str = Field(default="", max_length=200)
+    model_config = ConfigDict(extra="ignore")
+
+
+class TrainingPlanBidCreate(BaseModel):
+    title: str = Field(..., min_length=2, max_length=200)
+    summary: str = Field(default="", max_length=3000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class TrainingPlanBidAccept(BaseModel):
+    period: str = Field(default="first")  # first | second
+    model_config = ConfigDict(extra="ignore")
+
+
+class AppointmentsUpdate(BaseModel):
+    training_officer: Optional[str] = None
+    adjutant: Optional[str] = None
+    stores_officer: Optional[str] = None
+    community_officer: Optional[str] = None
+    health_safety_officer: Optional[str] = None
+    model_config = ConfigDict(extra="ignore")
 
 
 class EnquiryCreate(BaseModel):
@@ -250,6 +344,11 @@ class MessageCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=4000)
 
 
+class SmsResetRequestCreate(BaseModel):
+    note: str = Field(default="", max_length=2000)
+    model_config = ConfigDict(extra="ignore")
+
+
 class Audience(BaseModel):
     mode: str = "all"  # all | roles | users | parent_of
     roles: List[str] = []
@@ -263,6 +362,8 @@ class BroadcastCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=8000)
     audience: Audience = Field(default_factory=Audience)
     channels: List[str] = ["dashboard"]
+    attachment_ids: List[str] = []
+    base_url: str = ""
     model_config = ConfigDict(extra="ignore")
 
 
@@ -271,12 +372,27 @@ class NewsletterCreate(BaseModel):
     heading: str = Field(default="", max_length=200)
     intro: str = Field(default="", max_length=4000)
     body: str = Field(..., min_length=1, max_length=20000)
+    attachment_ids: List[str] = []
     model_config = ConfigDict(extra="ignore")
 
 
 class NewsletterSend(BaseModel):
     audience: Audience = Field(default_factory=Audience)
     channels: List[str] = ["dashboard", "email"]
+    base_url: str = ""
+    model_config = ConfigDict(extra="ignore")
+
+
+class SiteImageOverride(BaseModel):
+    src: str = Field(default="", max_length=4000)
+    alt: str = Field(default="", max_length=1000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class SiteContentUpdate(BaseModel):
+    path: str = Field(..., min_length=1, max_length=200)
+    texts: Dict[str, str] = {}
+    images: Dict[str, SiteImageOverride] = {}
     model_config = ConfigDict(extra="ignore")
 
 
@@ -320,21 +436,55 @@ def _text_to_html(text: str) -> str:
     return "".join(f'<p style="margin:0 0 12px;">{p.replace(chr(10), "<br/>")}</p>' for p in paras)
 
 
-def _broadcast_email_html(title: str, body: str, from_name: str) -> str:
-    inner = _text_to_html(body) + f'<p style="margin-top:20px;color:#5b6b78;font-size:13px;">&mdash; {from_name}</p>'
+def _attachments_email_html(attachments: Optional[list], base_url: str = "") -> str:
+    if not attachments:
+        return ""
+    items = "".join(
+        f'<li style="margin:4px 0;"><a href="{base_url}/api/attachments/{a["id"]}/download" style="color:#002F5F;">{a["filename"]}</a></li>'
+        for a in attachments)
+    return f'<p><strong>Attachments</strong></p><ul style="padding-left:20px;">{items}</ul>'
+
+
+def _broadcast_email_html(title: str, body: str, from_name: str,
+                          attachments: Optional[list] = None, base_url: str = "") -> str:
+    inner = (
+        _text_to_html(body)
+        + _attachments_email_html(attachments, base_url)
+        + f'<p style="margin-top:20px;color:#5b6b78;font-size:13px;">&mdash; {from_name}</p>'
+    )
     return _email_shell(title, inner)
 
 
-def _newsletter_email_html(nl: dict) -> str:
+def _newsletter_email_html(nl: dict, attachments: Optional[list] = None, base_url: str = "") -> str:
     parts = []
     if nl.get("intro"):
         parts.append(f'<p style="font-size:16px;color:#334;">{_text_to_html(nl["intro"])}</p>')
     parts.append(_text_to_html(nl.get("body", "")))
+    parts.append(_attachments_email_html(attachments, base_url))
     return _email_shell(nl.get("heading") or nl.get("subject", "Squadron newsletter"), "".join(parts))
 
 
 async def send_email(to: str, subject: str, html: str, reply_to: Optional[str] = None) -> str:
-    """Send one email via the managed proxy. Returns 'sent' | 'skipped' | 'failed'."""
+    """Send one email. Prefers Resend (own domain); falls back to the managed proxy.
+    Returns 'sent' | 'skipped' | 'failed'."""
+    # Preferred: Resend (user's own verified domain)
+    if RESEND_API_KEY and resend is not None:
+        resend.api_key = RESEND_API_KEY
+        params = {
+            "from": f"{EMAIL_FROM_NAME} <{SENDER_EMAIL}>",
+            "to": [to],
+            "subject": subject,
+            "html": html,
+        }
+        if reply_to:
+            params["reply_to"] = reply_to
+        try:
+            await asyncio.to_thread(resend.Emails.send, params)
+            return "sent"
+        except Exception as exc:  # pragma: no cover
+            logger.error("Resend send failed to %s: %s", to, exc)
+            return "failed"
+    # Fallback: Emergent managed email proxy
     if not EMERGENT_EMAIL_KEY:
         logger.info("Email not configured; skipped send to %s", to)
         return "skipped"
@@ -555,7 +705,8 @@ async def resolve_recipients(a: Audience) -> List[dict]:
 
 async def deliver_broadcast(users: List[dict], title: str, body: str, channels: List[str],
                             from_name: str, kind: str, email_html: Optional[str] = None,
-                            link: Optional[str] = None, link_label: Optional[str] = None) -> dict:
+                            link: Optional[str] = None, link_label: Optional[str] = None,
+                            links: Optional[List[dict]] = None) -> dict:
     channels = [c for c in channels if c in ("dashboard", "email")] or ["dashboard"]
     docs, emails_sent = [], 0
     for u in users:
@@ -570,13 +721,14 @@ async def deliver_broadcast(users: List[dict], title: str, body: str, channels: 
                          "body": body, "from_name": from_name, "kind": kind,
                          "channels": channels, "email_status": email_status,
                          "link": link, "link_label": link_label,
+                         "links": links or [],
                          "read": False, "created_at": now_iso()})
     if docs:
         await db.notifications.insert_many(docs)
         for d in docs:
             await push_to_user(d["user_id"], title, d.get("body", ""), "/portal")
     return {"recipients": len(users), "dashboard_delivered": len(docs), "emails_sent": emails_sent,
-            "email_configured": bool(EMERGENT_EMAIL_KEY)}
+            "email_configured": bool(RESEND_API_KEY or EMERGENT_EMAIL_KEY)}
 
 
 # ---------------------------------------------------------------------------
@@ -601,6 +753,7 @@ async def me(user: dict = Depends(get_current_user)):
     data = public_user(user)
     if user["role"] in ("cadet", "parent", "cfav", "admin"):
         data["stats"] = await compute_member_stats(user["id"])
+    data["appointments"] = await _user_appointments(user["id"])
     return data
 
 
@@ -636,13 +789,13 @@ def _enquiry_out(e: dict) -> dict:
 
 
 @api_router.get("/enquiries")
-async def list_enquiries(staff: dict = Depends(require_staff)):
+async def list_enquiries(staff: dict = Depends(require_privileged_staff)):
     rows = await db.enquiries.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [_enquiry_out(e) for e in rows]
 
 
 @api_router.get("/enquiries/tracker")
-async def enquiries_tracker(staff: dict = Depends(require_staff)):
+async def enquiries_tracker(staff: dict = Depends(require_privileged_staff)):
     """Prospective-cadet enquiries grouped by joining eligibility."""
     rows = await db.enquiries.find({"age_band": {"$ne": None}}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     buckets = {"now": [], "september": [], "future": []}
@@ -657,7 +810,7 @@ async def enquiries_tracker(staff: dict = Depends(require_staff)):
 
 
 @api_router.patch("/enquiries/{enquiry_id}", response_model=Enquiry)
-async def update_enquiry(enquiry_id: str, update: StatusUpdate, staff: dict = Depends(require_staff)):
+async def update_enquiry(enquiry_id: str, update: StatusUpdate, staff: dict = Depends(require_privileged_staff)):
     if update.status not in {"new", "read", "actioned"}:
         raise HTTPException(status_code=400, detail="Invalid status")
     res = await db.enquiries.find_one_and_update(
@@ -669,7 +822,7 @@ async def update_enquiry(enquiry_id: str, update: StatusUpdate, staff: dict = De
 
 
 @api_router.delete("/enquiries/{enquiry_id}")
-async def delete_enquiry(enquiry_id: str, staff: dict = Depends(require_staff)):
+async def delete_enquiry(enquiry_id: str, staff: dict = Depends(require_privileged_staff)):
     res = await db.enquiries.delete_one({"id": enquiry_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Enquiry not found")
@@ -702,7 +855,7 @@ async def _fetch_attachments(ids: List[str]) -> list:
 
 
 @api_router.post("/enquiries/recruit-email/bulk")
-async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require_staff)):
+async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require_privileged_staff)):
     if payload.eligibility not in ("now", "september", "future"):
         raise HTTPException(status_code=400, detail="Invalid eligibility group")
     atts = await _fetch_attachments(payload.attachment_ids)
@@ -720,7 +873,7 @@ async def recruit_email_bulk(payload: RecruitBulk, staff: dict = Depends(require
 
 
 @api_router.post("/enquiries/{enquiry_id}/recruit-email")
-async def recruit_email(enquiry_id: str, payload: RecruitEmail, staff: dict = Depends(require_staff)):
+async def recruit_email(enquiry_id: str, payload: RecruitEmail, staff: dict = Depends(require_privileged_staff)):
     e = await db.enquiries.find_one({"id": enquiry_id}, {"_id": 0})
     if not e:
         raise HTTPException(status_code=404, detail="Enquiry not found")
@@ -1020,8 +1173,11 @@ async def public_blog(slug: str):
 # User management (staff)
 # ---------------------------------------------------------------------------
 @api_router.get("/users")
-async def list_users(staff: dict = Depends(require_staff), role: Optional[str] = None):
+async def list_users(staff: dict = Depends(require_privileged_staff), role: Optional[str] = None,
+                     uniformed: Optional[bool] = None):
     q = {"role": role} if role else {}
+    if role == "cfav" and uniformed is not None:
+        q["is_uniformed"] = bool(uniformed)
     users = await db.users.find(q, {"_id": 0}).sort("first_name", 1).to_list(2000)
     out = []
     for u in users:
@@ -1033,7 +1189,7 @@ async def list_users(staff: dict = Depends(require_staff), role: Optional[str] =
 
 
 @api_router.post("/users")
-async def create_user(payload: UserCreate, staff: dict = Depends(require_staff)):
+async def create_user(payload: UserCreate, staff: dict = Depends(require_privileged_staff)):
     if payload.role not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
     existing = await db.users.find_one({"email": payload.email.lower()})
@@ -1043,6 +1199,7 @@ async def create_user(payload: UserCreate, staff: dict = Depends(require_staff))
         "id": str(uuid.uuid4()), "email": payload.email.lower(),
         "password_hash": hash_password(payload.password), "role": payload.role,
         "first_name": payload.first_name, "last_name": payload.last_name,
+        "is_uniformed": bool(payload.is_uniformed) if payload.role == "cfav" else None,
         "child_ids": payload.child_ids if payload.role == "parent" else [],
         "bonus_points": 0, "created_at": now_iso(),
     }
@@ -1051,8 +1208,16 @@ async def create_user(payload: UserCreate, staff: dict = Depends(require_staff))
 
 
 @api_router.patch("/users/{user_id}")
-async def update_user(user_id: str, payload: UserUpdate, staff: dict = Depends(require_staff)):
+async def update_user(user_id: str, payload: UserUpdate, staff: dict = Depends(require_privileged_staff)):
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if "role" in updates and updates["role"] != "cfav":
+        updates["is_uniformed"] = None
+    if "is_uniformed" in updates and "role" not in updates:
+        existing = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1})
+        if not existing:
+            raise HTTPException(status_code=404, detail="User not found")
+        if existing.get("role") != "cfav":
+            updates["is_uniformed"] = None
     if "role" in updates and updates["role"] not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
     if not updates:
@@ -1066,7 +1231,7 @@ async def update_user(user_id: str, payload: UserUpdate, staff: dict = Depends(r
 
 
 @api_router.post("/users/{user_id}/reset-password")
-async def reset_user_password(user_id: str, payload: ResetPassword, staff: dict = Depends(require_staff)):
+async def reset_user_password(user_id: str, payload: ResetPassword, staff: dict = Depends(require_privileged_staff)):
     res = await db.users.update_one({"id": user_id},
                                     {"$set": {"password_hash": hash_password(payload.new_password)}})
     if res.matched_count == 0:
@@ -1075,7 +1240,7 @@ async def reset_user_password(user_id: str, payload: ResetPassword, staff: dict 
 
 
 @api_router.delete("/users/{user_id}")
-async def delete_user(user_id: str, staff: dict = Depends(require_staff)):
+async def delete_user(user_id: str, staff: dict = Depends(require_privileged_staff)):
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1083,6 +1248,712 @@ async def delete_user(user_id: str, staff: dict = Depends(require_staff)):
         raise HTTPException(status_code=400, detail="Cannot delete the admin account")
     await db.users.delete_one({"id": user_id})
     return {"deleted": True}
+
+
+@api_router.get("/appointments")
+async def get_appointments(staff: dict = Depends(require_roles("admin"))):
+    doc = await _appointments_doc()
+    value = doc.get("value", {})
+    out = {}
+    for k in APPOINTMENT_KEYS:
+        uid = value.get(k)
+        if not uid:
+            out[k] = None
+            continue
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+        out[k] = public_user(u) if u else None
+    return out
+
+
+@api_router.put("/appointments")
+async def set_appointments(payload: AppointmentsUpdate, staff: dict = Depends(require_roles("admin"))):
+    val = payload.model_dump()
+    cleaned = {}
+    for k, uid in val.items():
+        if k not in APPOINTMENT_KEYS:
+            continue
+        if uid in (None, ""):
+            cleaned[k] = None
+            continue
+        u = await db.users.find_one({"id": uid}, {"_id": 0})
+        if not u or u.get("role") not in ("admin", "cfav"):
+            raise HTTPException(status_code=400, detail=f"Invalid appointment user for {k}")
+        cleaned[k] = uid
+
+    await db.settings.update_one(
+        {"key": "appointments"},
+        {"$set": {"key": "appointments", "value": cleaned, "updated_at": now_iso(), "updated_by": staff["id"]}},
+        upsert=True,
+    )
+    return {"saved": True}
+
+
+# ---------------------------------------------------------------------------
+# Cadet status tracker (Excel import + progression alerts)
+# ---------------------------------------------------------------------------
+def _pick_col(cols: List[str], candidates: List[str]) -> Optional[str]:
+    folded = {re.sub(r"[^a-z0-9]+", "", c.lower()): c for c in cols}
+    for cand in candidates:
+        key = re.sub(r"[^a-z0-9]+", "", cand.lower())
+        if key in folded:
+            return folded[key]
+    return None
+
+
+def _badge_list(val) -> List[str]:
+    if val is None:
+        return []
+    s = str(val).strip()
+    if not s:
+        return []
+    parts = re.split(r"[,;|/]", s)
+    out = [p.strip() for p in parts if p.strip()]
+    seen, uniq = set(), []
+    for x in out:
+        k = x.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        uniq.append(x)
+    return uniq[:20]
+
+
+async def _send_classification_stagnation_alerts() -> dict:
+    rows = await db.cadet_tracker.find({}, {"_id": 0}).to_list(5000)
+    if not rows:
+        return {"processed": 0, "cadet_messages": 0, "admin_notifications": 0}
+
+    admins = await db.users.find({"role": "admin"}, {"_id": 0, "id": 1}).to_list(200)
+    now = datetime.now(timezone.utc)
+    cadet_messages = 0
+    admin_notifications = 0
+
+    for r in rows:
+        cadet_id = r.get("user_id")
+        if not cadet_id:
+            continue
+        changed_at = r.get("classification_changed_at") or r.get("updated_at") or r.get("created_at")
+        if not changed_at:
+            continue
+        try:
+            last_dt = datetime.fromisoformat(changed_at.replace("Z", "+00:00"))
+        except Exception:
+            continue
+        days = (now - last_dt).days
+        if days < 30:
+            continue
+        level = 3 if days >= 90 else (2 if days >= 60 else 1)
+
+        state = await db.cadet_progress_alerts.find_one({"cadet_id": cadet_id}, {"_id": 0})
+        sent = set((state or {}).get("sent_levels", []))
+        if level in sent:
+            continue
+
+        # Ensure we send missing lower levels once as cadence catches up.
+        to_send = [lv for lv in (1, 2, 3) if lv <= level and lv not in sent]
+        for lv in to_send:
+            body = (
+                "Your classification has not changed for 1 month. Speak with staff about your next classification target."
+                if lv == 1 else
+                "Your classification has not changed for 2 months. Please ask staff for a progression plan."
+                if lv == 2 else
+                "Your classification has not changed for 3 months. Staff have been notified to help plan support."
+            )
+            msg = {
+                "id": str(uuid.uuid4()), "member_id": cadet_id,
+                "member_name": r.get("name", "Cadet"),
+                "from_staff": True, "author": "Training Team",
+                "body": body, "created_at": now_iso(),
+                "read_by_member": False, "read_by_staff": True,
+            }
+            await db.messages.insert_one(msg)
+            await push_to_user(cadet_id, "Classification progression", body, "/portal")
+            cadet_messages += 1
+
+            if lv == 3 and admins:
+                notes = [{
+                    "id": str(uuid.uuid4()),
+                    "user_id": a["id"],
+                    "title": "3-month classification stall",
+                    "body": f"{r.get('name','Cadet')} has had no classification change for 3 months.",
+                    "from_name": "Training Monitor",
+                    "kind": "progression_alert",
+                    "channels": ["dashboard"],
+                    "read": False,
+                    "created_at": now_iso(),
+                } for a in admins]
+                await db.notifications.insert_many(notes)
+                for n in notes:
+                    await push_to_user(n["user_id"], n["title"], n["body"], "/portal")
+                admin_notifications += len(notes)
+
+        sent.update(to_send)
+        await db.cadet_progress_alerts.update_one(
+            {"cadet_id": cadet_id},
+            {"$set": {
+                "cadet_id": cadet_id,
+                "sent_levels": sorted(sent),
+                "classification": r.get("classification", ""),
+                "classification_changed_at": r.get("classification_changed_at"),
+                "updated_at": now_iso(),
+            }},
+            upsert=True,
+        )
+
+    return {
+        "processed": len(rows),
+        "cadet_messages": cadet_messages,
+        "admin_notifications": admin_notifications,
+    }
+
+
+@api_router.post("/cadet-tracker/upload")
+async def upload_cadet_tracker(file: UploadFile = File(...), staff: dict = Depends(require_roles("admin"))):
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 10MB).")
+
+    import pandas as pd
+    try:
+        if (file.filename or "").lower().endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(data))
+        else:
+            df = pd.read_excel(io.BytesIO(data))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read file. Upload .xlsx or .csv cadet tracker.")
+
+    cols = [str(c) for c in df.columns]
+    name_col = _pick_col(cols, ["name", "cadet name", "full name"])
+    rank_col = _pick_col(cols, ["rank", "cadet rank"])
+    class_col = _pick_col(cols, ["classification", "class", "training classification"])
+    badge_col = _pick_col(cols, ["badges", "major badges", "achievement badges"])
+    email_col = _pick_col(cols, ["email", "cadet email", "contact email"])
+    if not name_col:
+        raise HTTPException(status_code=400, detail="Tracker must include a cadet name column.")
+
+    created, updated = 0, 0
+    out_rows = []
+    for _, row in df.fillna("").iterrows():
+        nm = str(row.get(name_col, "")).strip()
+        if not nm:
+            continue
+        rank = str(row.get(rank_col, "")).strip() if rank_col else ""
+        classification = str(row.get(class_col, "")).strip() if class_col else ""
+        badges = _badge_list(row.get(badge_col, "")) if badge_col else []
+        em = str(row.get(email_col, "")).strip().lower() if email_col else ""
+
+        cadet = None
+        if em:
+            cadet = await db.users.find_one({"email": em, "role": "cadet"}, {"_id": 0})
+        if cadet is None:
+            parts = nm.split()
+            first = parts[0].lower() if parts else ""
+            last = " ".join(parts[1:]).lower() if len(parts) > 1 else ""
+            if first:
+                cadet = await db.users.find_one({
+                    "role": "cadet",
+                    "first_name": {"$regex": f"^{re.escape(first)}$", "$options": "i"},
+                    "last_name": {"$regex": f"^{re.escape(last)}$", "$options": "i"},
+                }, {"_id": 0})
+
+        tracker_key = cadet["id"] if cadet else nm.lower()
+        existing = await db.cadet_tracker.find_one({"tracker_key": tracker_key}, {"_id": 0})
+        changed_at = existing.get("classification_changed_at") if existing else None
+        prev_class = (existing or {}).get("classification", "")
+        if classification and classification != prev_class:
+            changed_at = now_iso()
+            await db.cadet_progress_alerts.delete_one({"cadet_id": (cadet or {}).get("id")})
+        if not changed_at:
+            changed_at = now_iso()
+
+        doc = {
+            "tracker_key": tracker_key,
+            "user_id": cadet["id"] if cadet else None,
+            "name": nm,
+            "email": cadet.get("email") if cadet else em,
+            "rank": rank,
+            "classification": classification,
+            "major_badges": badges,
+            "classification_changed_at": changed_at,
+            "updated_at": now_iso(),
+            "updated_by": staff["id"],
+        }
+        res = await db.cadet_tracker.update_one({"tracker_key": tracker_key}, {"$set": doc}, upsert=True)
+        if res.upserted_id:
+            created += 1
+        else:
+            updated += 1
+        out_rows.append(doc)
+
+    return {"created": created, "updated": updated, "rows": out_rows}
+
+
+@api_router.get("/cadet-tracker")
+async def list_cadet_tracker(staff: dict = Depends(require_staff)):
+    return await db.cadet_tracker.find({}, {"_id": 0}).sort("name", 1).to_list(5000)
+
+
+@api_router.post("/cadet-tracker/run-alerts")
+async def run_cadet_tracker_alerts(staff: dict = Depends(require_roles("admin"))):
+    return await _send_classification_stagnation_alerts()
+
+
+# ---------------------------------------------------------------------------
+# CFAV planning inputs (availability, event ideas, skill matrix)
+# ---------------------------------------------------------------------------
+@api_router.post("/cfav/availability")
+async def submit_cfav_availability(payload: CfavAvailabilityCreate, cfav: dict = Depends(require_roles("cfav"))):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "cfav_id": cfav["id"],
+        "cfav_name": f"{cfav.get('first_name','')} {cfav.get('last_name','')}".strip() or "CFAV",
+        "is_uniformed": bool(cfav.get("is_uniformed", False)),
+        "parade_date": payload.parade_date,
+        "available": bool(payload.available),
+        "capabilities": payload.capabilities,
+        "note": payload.note,
+        "created_at": now_iso(),
+    }
+    await db.cfav_availability.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.post("/cfav/event-ideas")
+async def submit_cfav_event_idea(payload: CfavEventIdeaCreate, cfav: dict = Depends(require_roles("cfav"))):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "cfav_id": cfav["id"],
+        "cfav_name": f"{cfav.get('first_name','')} {cfav.get('last_name','')}".strip() or "CFAV",
+        "is_uniformed": bool(cfav.get("is_uniformed", False)),
+        "title": payload.title,
+        "parade_date": payload.parade_date,
+        "summary": payload.summary,
+        "created_at": now_iso(),
+    }
+    await db.cfav_event_ideas.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.post("/cfav/skills")
+async def submit_cfav_skills(payload: CfavSkillMatrixCreate, cfav: dict = Depends(require_roles("cfav"))):
+    doc = {
+        "cfav_id": cfav["id"],
+        "cfav_name": f"{cfav.get('first_name','')} {cfav.get('last_name','')}".strip() or "CFAV",
+        "is_uniformed": bool(cfav.get("is_uniformed", False)),
+        "skills": payload.skills,
+        "qualifications": payload.qualifications,
+        "interested_activities": payload.interested_activities,
+        "willing_to_support": payload.willing_to_support,
+        "note": payload.note,
+        "updated_at": now_iso(),
+    }
+    await db.cfav_skill_matrix.update_one({"cfav_id": cfav["id"]}, {"$set": doc}, upsert=True)
+    return doc
+
+
+@api_router.get("/cfav/skills/me")
+async def get_cfav_skills_me(cfav: dict = Depends(require_roles("cfav"))):
+    doc = await db.cfav_skill_matrix.find_one({"cfav_id": cfav["id"]}, {"_id": 0})
+    return doc or {
+        "cfav_id": cfav["id"],
+        "skills": [],
+        "qualifications": [],
+        "interested_activities": [],
+        "willing_to_support": [],
+        "note": "",
+    }
+
+
+@api_router.get("/planning/cfav-inputs")
+async def planning_cfav_inputs(staff: dict = Depends(require_staff), uniformed: Optional[bool] = None):
+    fq = {"is_uniformed": bool(uniformed)} if uniformed is not None else {}
+    av = await db.cfav_availability.find(fq, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    ideas = await db.cfav_event_ideas.find(fq, {"_id": 0}).sort("created_at", -1).to_list(5000)
+    skills = await db.cfav_skill_matrix.find(fq, {"_id": 0}).sort("cfav_name", 1).to_list(5000)
+    return {"availability": av, "event_ideas": ideas, "skills": skills}
+
+
+# ---------------------------------------------------------------------------
+# Training plan (month slots, CFAV bids, A4 export)
+# ---------------------------------------------------------------------------
+def _add_months(d: date, months: int) -> date:
+    y = d.year + ((d.month - 1 + months) // 12)
+    m = ((d.month - 1 + months) % 12) + 1
+    return date(y, m, 1)
+
+
+def _easter_sunday(year: int) -> date:
+    # Anonymous Gregorian algorithm
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _observed(dt: date) -> date:
+    if dt.weekday() == 5:  # Saturday
+        return dt + timedelta(days=2)
+    if dt.weekday() == 6:  # Sunday
+        return dt + timedelta(days=1)
+    return dt
+
+
+def _uk_bank_holidays_england_wales(year: int) -> set:
+    easter = _easter_sunday(year)
+    good_friday = easter - timedelta(days=2)
+    easter_monday = easter + timedelta(days=1)
+
+    new_year = _observed(date(year, 1, 1))
+    early_may = date(year, 5, 1) + timedelta(days=(7 - date(year, 5, 1).weekday()) % 7)
+    spring_bank = date(year, 5, 31) - timedelta(days=(date(year, 5, 31).weekday() - 0) % 7)
+    summer_bank = date(year, 8, 31) - timedelta(days=(date(year, 8, 31).weekday() - 0) % 7)
+
+    christmas = date(year, 12, 25)
+    boxing = date(year, 12, 26)
+    if christmas.weekday() == 5:  # Sat
+        christmas_obs = date(year, 12, 27)
+        boxing_obs = date(year, 12, 28)
+    elif christmas.weekday() == 6:  # Sun
+        christmas_obs = date(year, 12, 27)
+        boxing_obs = date(year, 12, 26)
+    elif boxing.weekday() == 5:  # Sat
+        christmas_obs = christmas
+        boxing_obs = date(year, 12, 28)
+    elif boxing.weekday() == 6:  # Sun
+        christmas_obs = christmas
+        boxing_obs = date(year, 12, 27)
+    else:
+        christmas_obs = christmas
+        boxing_obs = boxing
+
+    return {
+        new_year,
+        good_friday,
+        easter_monday,
+        early_may,
+        spring_bank,
+        summer_bank,
+        christmas_obs,
+        boxing_obs,
+    }
+
+
+def _slot_out(s: dict, month_index: int, my_bid_count: int = 0) -> dict:
+    return {
+        "id": s["id"],
+        "slot_date": s["slot_date"],
+        "day_label": s.get("day_label", ""),
+        "first_period_activity": s.get("first_period_activity", ""),
+        "second_period_activity": s.get("second_period_activity", ""),
+        "uniform_needed": s.get("uniform_needed", ""),
+        "no_parade": bool(s.get("no_parade", False)),
+        "no_parade_reason": s.get("no_parade_reason", ""),
+        "month_index": month_index,
+        "can_bid": month_index in (1, 2, 3) and not bool(s.get("no_parade", False)),
+        "my_bid_count": my_bid_count,
+    }
+
+
+async def _ensure_training_slots(months_ahead: int = 3, actor_id: str = "system") -> int:
+    today = date.today()
+    created = 0
+    for mo in range(1, max(1, months_ahead) + 1):
+        target = _add_months(date(today.year, today.month, 1), mo)
+        days = monthrange(target.year, target.month)[1]
+        holidays = _uk_bank_holidays_england_wales(target.year)
+        for dnum in range(1, days + 1):
+            d = date(target.year, target.month, dnum)
+            if d.weekday() not in (0, 3):
+                continue
+            is_holiday = d in holidays
+            slot_id = f"tp-{d.isoformat()}"
+            doc = {
+                "id": slot_id,
+                "slot_date": d.isoformat(),
+                "day_label": d.strftime("%a"),
+                "first_period_activity": "" if not is_holiday else "NO PARADE",
+                "second_period_activity": "" if not is_holiday else "Bank holiday",
+                "uniform_needed": "" if not is_holiday else "N/A",
+                "no_parade": bool(is_holiday),
+                "no_parade_reason": "Bank holiday" if is_holiday else "",
+                "updated_at": now_iso(),
+                "updated_by": actor_id,
+            }
+            res = await db.training_plan.update_one(
+                {"slot_date": d.isoformat()},
+                {"$setOnInsert": doc},
+                upsert=True,
+            )
+            if res.upserted_id:
+                created += 1
+    return created
+
+
+@api_router.post("/training-plan/populate-next-month")
+async def populate_training_plan_next_month(staff: dict = Depends(require_privileged_staff)):
+    created = await _ensure_training_slots(months_ahead=3, actor_id=staff["id"])
+    target = _add_months(date.today().replace(day=1), 1)
+    return {"month": target.strftime("%Y-%m"), "created": created, "months_seeded": 3}
+
+
+@api_router.get("/training-plan")
+async def list_training_plan(user: dict = Depends(require_roles("admin", "cfav")), months: int = 3):
+    m = max(1, min(6, int(months or 3)))
+    await _ensure_training_slots(months_ahead=max(3, m), actor_id="system")
+    today = date.today()
+    start = date(today.year, today.month, 1)
+    end = _add_months(start, m + 1)
+    rows = await db.training_plan.find({
+        "slot_date": {"$gte": start.isoformat(), "$lt": end.isoformat()}
+    }, {"_id": 0}).sort("slot_date", 1).to_list(2000)
+
+    out = []
+    for r in rows:
+        sd = date.fromisoformat(r["slot_date"])
+        month_idx = (sd.year - today.year) * 12 + (sd.month - today.month)
+        my_count = 0
+        if user["role"] == "cfav":
+            my_count = await db.training_plan_bids.count_documents({"slot_id": r["id"], "cfav_id": user["id"]})
+        out.append(_slot_out(r, month_idx, my_count))
+    return out
+
+
+@api_router.patch("/training-plan/{slot_id}")
+async def update_training_slot(slot_id: str, payload: TrainingPlanSlotUpdate,
+                               staff: dict = Depends(require_privileged_staff)):
+    updates = payload.model_dump()
+    updates["updated_at"] = now_iso()
+    updates["updated_by"] = staff["id"]
+    res = await db.training_plan.find_one_and_update(
+        {"id": slot_id}, {"$set": updates}, projection={"_id": 0}, return_document=True)
+    if not res:
+        raise HTTPException(status_code=404, detail="Training slot not found")
+    sd = date.fromisoformat(res["slot_date"])
+    today = date.today()
+    month_idx = (sd.year - today.year) * 12 + (sd.month - today.month)
+    return _slot_out(res, month_idx)
+
+
+@api_router.post("/training-plan/{slot_id}/bid")
+async def submit_training_bid(slot_id: str, payload: TrainingPlanBidCreate,
+                              cfav: dict = Depends(require_roles("cfav"))):
+    slot = await db.training_plan.find_one({"id": slot_id}, {"_id": 0})
+    if not slot:
+        raise HTTPException(status_code=404, detail="Training slot not found")
+    if slot.get("no_parade"):
+        raise HTTPException(status_code=400, detail="Cannot bid on a bank-holiday/no-parade slot")
+
+    today = date.today()
+    sd = date.fromisoformat(slot["slot_date"])
+    month_idx = (sd.year - today.year) * 12 + (sd.month - today.month)
+    if month_idx not in (1, 2, 3):
+        raise HTTPException(status_code=400, detail="Bids are allowed only for months 1 to 3 ahead")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "slot_id": slot_id,
+        "slot_date": slot["slot_date"],
+        "cfav_id": cfav["id"],
+        "cfav_name": f"{cfav.get('first_name','')} {cfav.get('last_name','')}".strip() or "CFAV",
+        "is_uniformed": bool(cfav.get("is_uniformed", False)),
+        "title": payload.title,
+        "summary": payload.summary,
+        "created_at": now_iso(),
+        "status": "suggested",
+    }
+    await db.training_plan_bids.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.get("/training-plan/bids")
+async def list_training_bids(staff: dict = Depends(require_privileged_staff), month: Optional[str] = None):
+    q = {}
+    if month and re.match(r"^\d{4}-\d{2}$", month):
+        q["slot_date"] = {"$gte": f"{month}-01", "$lt": f"{month}-32"}
+    rows = await db.training_plan_bids.find(q, {"_id": 0}).sort("created_at", -1).to_list(3000)
+    return rows
+
+
+@api_router.post("/training-plan/{slot_id}/bids/{bid_id}/accept")
+async def accept_training_bid(slot_id: str, bid_id: str, payload: TrainingPlanBidAccept,
+                              staff: dict = Depends(require_privileged_staff)):
+    bid = await db.training_plan_bids.find_one({"id": bid_id, "slot_id": slot_id}, {"_id": 0})
+    if not bid:
+        raise HTTPException(status_code=404, detail="Bid not found for this slot")
+    slot = await db.training_plan.find_one({"id": slot_id}, {"_id": 0})
+    if not slot:
+        raise HTTPException(status_code=404, detail="Training slot not found")
+    period = "second" if payload.period == "second" else "first"
+    field = "second_period_activity" if period == "second" else "first_period_activity"
+    await db.training_plan.update_one({"id": slot_id}, {"$set": {
+        field: bid.get("title", ""),
+        "updated_at": now_iso(),
+        "updated_by": staff["id"],
+    }})
+    await db.training_plan_bids.update_many({"slot_id": slot_id}, {"$set": {"status": "reviewed"}})
+    await db.training_plan_bids.update_one({"id": bid_id}, {"$set": {"status": "accepted", "accepted_at": now_iso(), "accepted_by": staff["id"], "accepted_period": period}})
+    return {"accepted": True, "period": period}
+
+
+@api_router.get("/training-plan/templates")
+async def list_training_templates(staff: dict = Depends(require_privileged_staff)):
+    return await db.training_plan_templates.find({}, {"_id": 0}).sort("month", -1).to_list(200)
+
+
+@api_router.post("/training-plan/templates/{month}/save")
+async def save_training_template(month: str, staff: dict = Depends(require_privileged_staff)):
+    if not re.match(r"^\d{4}-\d{2}$", month or ""):
+        raise HTTPException(status_code=400, detail="Month must be YYYY-MM")
+    rows = await db.training_plan.find({
+        "slot_date": {"$gte": f"{month}-01", "$lt": f"{month}-32"}
+    }, {"_id": 0}).sort("slot_date", 1).to_list(500)
+    tpl_rows = [{
+        "slot_date": r["slot_date"],
+        "first_period_activity": r.get("first_period_activity", ""),
+        "second_period_activity": r.get("second_period_activity", ""),
+        "uniform_needed": r.get("uniform_needed", ""),
+    } for r in rows]
+    await db.training_plan_templates.update_one(
+        {"month": month},
+        {"$set": {"month": month, "rows": tpl_rows, "updated_at": now_iso(), "updated_by": staff["id"]}},
+        upsert=True,
+    )
+    return {"saved": True, "month": month, "rows": len(tpl_rows)}
+
+
+@api_router.post("/training-plan/templates/{month}/apply")
+async def apply_training_template(month: str, staff: dict = Depends(require_privileged_staff)):
+    if not re.match(r"^\d{4}-\d{2}$", month or ""):
+        raise HTTPException(status_code=400, detail="Month must be YYYY-MM")
+    tpl = await db.training_plan_templates.find_one({"month": month}, {"_id": 0})
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found for this month")
+    holidays = _uk_bank_holidays_england_wales(int(month[:4]))
+    updated = 0
+    for r in tpl.get("rows", []):
+        sd = r.get("slot_date", "")
+        if not sd.startswith(f"{month}-"):
+            continue
+        d = date.fromisoformat(sd)
+        if d.weekday() not in (0, 3):
+            continue
+        is_holiday = d in holidays
+        set_fields = {
+            "updated_at": now_iso(),
+            "updated_by": staff["id"],
+            "no_parade": bool(is_holiday),
+            "no_parade_reason": "Bank holiday" if is_holiday else "",
+        }
+        if is_holiday:
+            set_fields.update({
+                "first_period_activity": "NO PARADE",
+                "second_period_activity": "Bank holiday",
+                "uniform_needed": "N/A",
+            })
+        else:
+            set_fields.update({
+                "first_period_activity": r.get("first_period_activity", ""),
+                "second_period_activity": r.get("second_period_activity", ""),
+                "uniform_needed": r.get("uniform_needed", ""),
+            })
+        await db.training_plan.update_one({"slot_date": sd}, {"$set": set_fields}, upsert=True)
+        updated += 1
+    return {"applied": True, "month": month, "updated": updated}
+
+
+@api_router.get("/training-plan/a4")
+async def training_plan_a4(month: str, staff: dict = Depends(require_privileged_staff)):
+    if not re.match(r"^\d{4}-\d{2}$", month or ""):
+        raise HTTPException(status_code=400, detail="Month must be YYYY-MM")
+    rows = await db.training_plan.find({
+        "slot_date": {"$gte": f"{month}-01", "$lt": f"{month}-32"}
+    }, {"_id": 0}).sort("slot_date", 1).to_list(500)
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except Exception:
+        raise HTTPException(status_code=500, detail="PDF export dependency missing")
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    app_doc = await _appointments_doc()
+    v = app_doc.get("value", {})
+    role_names = {}
+    for k in APPOINTMENT_KEYS:
+        uid = v.get(k)
+        if not uid:
+            role_names[k] = "TBC"
+            continue
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1})
+        role_names[k] = (f"{u.get('first_name','')} {u.get('last_name','')}".strip() if u else "TBC")
+
+    y = h - 32
+    c.setFillColorRGB(0.0, 0.18, 0.37)
+    c.rect(0, h - 70, w, 70, fill=1, stroke=0)
+    c.setFillColorRGB(0.78, 0.05, 0.19)
+    c.rect(0, h - 75, w, 5, fill=1, stroke=0)
+    c.setFillColorRGB(1, 1, 1)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(40, y, "1471 Horwich Squadron RAF Air Cadets")
+    c.setFont("Helvetica", 11)
+    c.drawString(40, y - 18, f"Training Plan - {month}")
+
+    y = h - 90
+    c.setFillColorRGB(0, 0, 0)
+    c.setFont("Helvetica", 8)
+    c.drawString(40, y, f"Training Officer: {role_names['training_officer']}")
+    c.drawString(220, y, f"Adjutant: {role_names['adjutant']}")
+    c.drawString(360, y, f"Stores: {role_names['stores_officer']}")
+    c.drawString(480, y, f"H&S: {role_names['health_safety_officer']}")
+    y -= 14
+    c.drawString(40, y, f"Community: {role_names['community_officer']}")
+    c.drawString(220, y, f"Generated: {datetime.now().strftime('%d %b %Y %H:%M')} UTC")
+    y -= 18
+    c.setFont("Helvetica", 9)
+    c.drawString(40, y, "Day/Date")
+    c.drawString(130, y, "First period activity")
+    c.drawString(310, y, "Second period activity")
+    c.drawString(485, y, "Uniform needed")
+    y -= 8
+    c.line(40, y, w - 40, y)
+    y -= 14
+
+    for r in rows:
+        if y < 60:
+            c.showPage()
+            y = h - 40
+            c.setFont("Helvetica", 9)
+        sd = date.fromisoformat(r["slot_date"])
+        daydate = f"{sd.strftime('%a')} {sd.strftime('%d %b')}"
+        p1 = r.get("first_period_activity", "")
+        p2 = r.get("second_period_activity", "")
+        un = r.get("uniform_needed", "")
+        c.drawString(40, y, daydate[:16])
+        c.drawString(130, y, p1[:34])
+        c.drawString(310, y, p2[:32])
+        c.drawString(485, y, un[:16])
+        y -= 14
+
+    c.save()
+    pdf = buf.getvalue()
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="training-plan-{month}.pdf"'},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1323,18 +2194,196 @@ async def staff_reply(member_id: str, payload: MessageCreate, staff: dict = Depe
 
 
 # ---------------------------------------------------------------------------
+# SMS support (CFAV reset request -> admin reply in dashboard)
+# ---------------------------------------------------------------------------
+def _sms_reset_email_html(requester_name: str, requester_email: str, note: str = "") -> str:
+    note_html = f'<p style="padding:12px;background:#EAF5F8;border-left:3px solid #002F5F;">{note}</p>' if note else ""
+    inner = f"""
+      <p><strong>SMS password reset request</strong></p>
+      <p><strong>From:</strong> {requester_name}</p>
+      <p><strong>Email:</strong> {requester_email}</p>
+      {note_html}
+      <p>Please action this SMS password reset. Replies should be sent in the portal SMS support thread rather than by email.</p>
+    """
+    return _email_shell("SMS password reset request", inner)
+
+
+def _sms_thread_out(t: dict) -> dict:
+    return {
+        "id": t["id"],
+        "requester_id": t["requester_id"],
+        "requester_name": t.get("requester_name", "CFAV"),
+        "requester_email": t.get("requester_email", ""),
+        "status": t.get("status", "open"),
+        "created_at": t.get("created_at"),
+        "updated_at": t.get("updated_at"),
+        "subject": t.get("subject", "SMS password reset"),
+        "email_status": t.get("email_status", "unknown"),
+        "messages": t.get("messages", []),
+    }
+
+
+@api_router.post("/sms-support/request")
+async def sms_support_request(payload: SmsResetRequestCreate, user: dict = Depends(require_roles("cfav"))):
+    requester_name = f"{user.get('first_name','')} {user.get('last_name','')}".strip() or "CFAV"
+    note = (payload.note or "").strip()
+    initial = note or "Please reset my SMS password."
+    msg = {
+        "id": str(uuid.uuid4()),
+        "author_id": user["id"],
+        "author_name": requester_name,
+        "from_admin": False,
+        "body": initial,
+        "created_at": now_iso(),
+        "read_by_requester": True,
+        "read_by_admin": False,
+    }
+    thread = {
+        "id": str(uuid.uuid4()),
+        "requester_id": user["id"],
+        "requester_name": requester_name,
+        "requester_email": user.get("email", ""),
+        "status": "open",
+        "subject": "SMS password reset",
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "email_status": "pending",
+        "messages": [msg],
+    }
+    email_status = await send_email(
+        SMS_RESET_EMAIL,
+        f"SMS password reset request - {requester_name}",
+        _sms_reset_email_html(requester_name, user.get("email", ""), note),
+        reply_to=user.get("email", "") or None,
+    )
+    thread["email_status"] = email_status
+    await db.sms_support_threads.insert_one(thread)
+
+    admins = await db.users.find({"role": "admin"}, {"_id": 0, "id": 1}).to_list(100)
+    notice_docs = [{
+        "id": str(uuid.uuid4()),
+        "user_id": a["id"],
+        "title": "SMS reset request",
+        "body": f"{requester_name} requested an SMS password reset.",
+        "from_name": requester_name,
+        "kind": "sms_support",
+        "channels": ["dashboard"],
+        "read": False,
+        "created_at": now_iso(),
+    } for a in admins]
+    if notice_docs:
+        await db.notifications.insert_many(notice_docs)
+        for n in notice_docs:
+            await push_to_user(n["user_id"], n["title"], n["body"], "/portal")
+    return {"thread": _sms_thread_out(thread), "email_status": email_status}
+
+
+@api_router.get("/sms-support/threads")
+async def sms_support_threads(admin: dict = Depends(require_roles("admin"))):
+    rows = await db.sms_support_threads.find({}, {"_id": 0}).sort("updated_at", -1).to_list(1000)
+    out = []
+    for t in rows:
+        unread = sum(1 for m in t.get("messages", []) if not m.get("from_admin") and not m.get("read_by_admin", False))
+        x = _sms_thread_out(t)
+        x.pop("messages", None)
+        x["unread"] = unread
+        x["last_body"] = (t.get("messages") or [{}])[-1].get("body", "")
+        out.append(x)
+    return out
+
+
+@api_router.get("/sms-support/my-threads")
+async def sms_support_my_threads(user: dict = Depends(require_roles("cfav"))):
+    rows = await db.sms_support_threads.find({"requester_id": user["id"]}, {"_id": 0}).sort("updated_at", -1).to_list(200)
+    out = []
+    for t in rows:
+        unread = sum(1 for m in t.get("messages", []) if m.get("from_admin") and not m.get("read_by_requester", False))
+        x = _sms_thread_out(t)
+        x.pop("messages", None)
+        x["unread"] = unread
+        x["last_body"] = (t.get("messages") or [{}])[-1].get("body", "")
+        out.append(x)
+    return out
+
+
+@api_router.get("/sms-support/thread/{thread_id}")
+async def sms_support_view_thread(thread_id: str, user: dict = Depends(require_roles("admin", "cfav"))):
+    t = await db.sms_support_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if user["role"] != "admin" and t.get("requester_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    field = "messages.$[m].read_by_admin" if user["role"] == "admin" else "messages.$[m].read_by_requester"
+    arr_filter = [{"m.from_admin": False}] if user["role"] == "admin" else [{"m.from_admin": True}]
+    await db.sms_support_threads.update_one(
+        {"id": thread_id},
+        {"$set": {field: True}},
+        array_filters=arr_filter,
+    )
+    t2 = await db.sms_support_threads.find_one({"id": thread_id}, {"_id": 0})
+    return _sms_thread_out(t2)
+
+
+@api_router.post("/sms-support/thread/{thread_id}/reply")
+async def sms_support_reply(thread_id: str, payload: MessageCreate, user: dict = Depends(require_roles("admin", "cfav"))):
+    t = await db.sms_support_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    if user["role"] != "admin" and t.get("requester_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    from_admin = user["role"] == "admin"
+    author_name = f"{user.get('first_name','')} {user.get('last_name','')}".strip() or ("Admin" if from_admin else "CFAV")
+    msg = {
+        "id": str(uuid.uuid4()),
+        "author_id": user["id"],
+        "author_name": author_name,
+        "from_admin": from_admin,
+        "body": payload.body,
+        "created_at": now_iso(),
+        "read_by_requester": from_admin is False,
+        "read_by_admin": from_admin is True,
+    }
+    await db.sms_support_threads.update_one(
+        {"id": thread_id},
+        {"$push": {"messages": msg}, "$set": {"updated_at": now_iso()}},
+    )
+    return msg
+
+
+# ---------------------------------------------------------------------------
 # Broadcast messages / notifications (staff -> targeted members)
 # ---------------------------------------------------------------------------
 @api_router.post("/broadcast")
-async def create_broadcast(payload: BroadcastCreate, staff: dict = Depends(require_staff)):
+async def create_broadcast(payload: BroadcastCreate, staff: dict = Depends(require_privileged_staff)):
     users = await resolve_recipients(payload.audience)
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Squadron Staff"
-    result = await deliver_broadcast(users, payload.title, payload.body, payload.channels, from_name, "message")
+    attachments = await _fetch_attachments(payload.attachment_ids)
+    attach_note = ""
+    if attachments:
+        names = "\n".join(f"- {a['filename']}" for a in attachments)
+        attach_note = f"\n\nAttachments:\n{names}"
+    email_html = _broadcast_email_html(payload.title, payload.body, from_name, attachments, payload.base_url)
+    links = [{"url": f"/api/attachments/{a['id']}/download", "label": a["filename"]} for a in attachments]
+    result = await deliver_broadcast(
+        users,
+        payload.title,
+        payload.body + attach_note,
+        payload.channels,
+        from_name,
+        "message",
+        email_html=email_html,
+        link=links[0]["url"] if links else None,
+        link_label=links[0]["label"] if links else None,
+        links=links,
+    )
     await db.broadcasts.insert_one({
         "id": str(uuid.uuid4()), "title": payload.title, "body": payload.body,
         "channels": result and payload.channels, "audience": payload.audience.model_dump(),
+        "attachment_ids": payload.attachment_ids,
         "sent_by": from_name, "created_at": now_iso(), "result": result})
     return result
 
@@ -1365,6 +2414,67 @@ async def mark_all_read(user: dict = Depends(get_current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Website content CMS (page text + image overrides)
+# ---------------------------------------------------------------------------
+def _site_doc_out(d: dict) -> dict:
+    return {
+        "path": d.get("path", "/"),
+        "texts": d.get("texts", {}),
+        "images": d.get("images", {}),
+        "updated_at": d.get("updated_at"),
+        "updated_by": d.get("updated_by", ""),
+    }
+
+
+@api_router.get("/site-content/page")
+async def get_site_content_page(path: str):
+    p = (path or "/").strip()
+    if not p.startswith("/"):
+        p = f"/{p}"
+    doc = await db.site_content.find_one({"path": p}, {"_id": 0})
+    if not doc:
+        return {"path": p, "texts": {}, "images": {}, "updated_at": None, "updated_by": ""}
+    return _site_doc_out(doc)
+
+
+@api_router.get("/site-content/pages")
+async def list_site_content_pages(staff: dict = Depends(require_staff)):
+    rows = await db.site_content.find({}, {"_id": 0}).sort("path", 1).to_list(1000)
+    return [_site_doc_out(r) for r in rows]
+
+
+@api_router.put("/site-content/pages")
+async def upsert_site_content_page(payload: SiteContentUpdate, staff: dict = Depends(require_staff)):
+    p = payload.path.strip()
+    if not p.startswith("/"):
+        p = f"/{p}"
+    if p.startswith("/portal"):
+        raise HTTPException(status_code=400, detail="Portal routes cannot be edited with site CMS")
+    images = {k: v.model_dump() for k, v in payload.images.items()}
+    cleaned_texts = {k: v for k, v in payload.texts.items() if isinstance(v, str)}
+    doc = {
+        "path": p,
+        "texts": cleaned_texts,
+        "images": images,
+        "updated_at": now_iso(),
+        "updated_by": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or staff.get("email", "Staff"),
+    }
+    await db.site_content.update_one({"path": p}, {"$set": doc}, upsert=True)
+    return doc
+
+
+@api_router.delete("/site-content/pages")
+async def delete_site_content_page(path: str, staff: dict = Depends(require_staff)):
+    p = (path or "").strip()
+    if not p:
+        raise HTTPException(status_code=400, detail="Path is required")
+    if not p.startswith("/"):
+        p = f"/{p}"
+    res = await db.site_content.delete_one({"path": p})
+    return {"deleted": res.deleted_count > 0}
+
+
+# ---------------------------------------------------------------------------
 # Newsletters (staff compose + preview + send)
 # ---------------------------------------------------------------------------
 def _newsletter_out(n: dict) -> dict:
@@ -1372,13 +2482,13 @@ def _newsletter_out(n: dict) -> dict:
 
 
 @api_router.get("/newsletters")
-async def list_newsletters(staff: dict = Depends(require_staff)):
+async def list_newsletters(staff: dict = Depends(require_privileged_staff)):
     rows = await db.newsletters.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     return rows
 
 
 @api_router.post("/newsletters")
-async def create_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_staff)):
+async def create_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_privileged_staff)):
     nl = {"id": str(uuid.uuid4()), **payload.model_dump(), "status": "draft",
           "created_by": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Staff",
           "created_at": now_iso(), "sent_at": None, "result": None}
@@ -1387,7 +2497,7 @@ async def create_newsletter(payload: NewsletterCreate, staff: dict = Depends(req
 
 
 @api_router.patch("/newsletters/{newsletter_id}")
-async def update_newsletter(newsletter_id: str, payload: NewsletterCreate, staff: dict = Depends(require_staff)):
+async def update_newsletter(newsletter_id: str, payload: NewsletterCreate, staff: dict = Depends(require_privileged_staff)):
     n = await db.newsletters.find_one_and_update(
         {"id": newsletter_id}, {"$set": payload.model_dump()},
         projection={"_id": 0}, return_document=True)
@@ -1397,7 +2507,7 @@ async def update_newsletter(newsletter_id: str, payload: NewsletterCreate, staff
 
 
 @api_router.delete("/newsletters/{newsletter_id}")
-async def delete_newsletter(newsletter_id: str, staff: dict = Depends(require_staff)):
+async def delete_newsletter(newsletter_id: str, staff: dict = Depends(require_privileged_staff)):
     res = await db.newsletters.delete_one({"id": newsletter_id})
     if res.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Newsletter not found")
@@ -1405,12 +2515,13 @@ async def delete_newsletter(newsletter_id: str, staff: dict = Depends(require_st
 
 
 @api_router.post("/newsletters/preview")
-async def preview_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_staff)):
-    return {"html": _newsletter_email_html(payload.model_dump())}
+async def preview_newsletter(payload: NewsletterCreate, staff: dict = Depends(require_privileged_staff)):
+    attachments = await _fetch_attachments(payload.attachment_ids)
+    return {"html": _newsletter_email_html(payload.model_dump(), attachments)}
 
 
 @api_router.post("/newsletters/{newsletter_id}/send")
-async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: dict = Depends(require_staff)):
+async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: dict = Depends(require_privileged_staff)):
     nl = await db.newsletters.find_one({"id": newsletter_id}, {"_id": 0})
     if not nl:
         raise HTTPException(status_code=404, detail="Newsletter not found")
@@ -1418,10 +2529,20 @@ async def send_newsletter(newsletter_id: str, payload: NewsletterSend, staff: di
     if not users:
         raise HTTPException(status_code=400, detail="No recipients match this audience")
     from_name = nl.get("created_by") or "Squadron Staff"
+    attachments = await _fetch_attachments(nl.get("attachment_ids") or [])
+    attach_note = ""
+    if attachments:
+        names = "\n".join(f"- {a['filename']}" for a in attachments)
+        attach_note = f"\n\nAttachments:\n{names}"
     dash_body = (nl.get("intro", "") + ("\n\n" if nl.get("intro") else "") + nl.get("body", "")).strip()
-    email_html = _newsletter_email_html(nl)
+    dash_body = (dash_body + attach_note).strip()
+    email_html = _newsletter_email_html(nl, attachments, payload.base_url)
+    links = [{"url": f"/api/attachments/{a['id']}/download", "label": a["filename"]} for a in attachments]
     result = await deliver_broadcast(users, nl["subject"], dash_body, payload.channels,
-                                     from_name, "newsletter", email_html=email_html)
+                                     from_name, "newsletter", email_html=email_html,
+                                     link=links[0]["url"] if links else None,
+                                     link_label=links[0]["label"] if links else None,
+                                     links=links)
     await db.newsletters.update_one({"id": newsletter_id},
                                     {"$set": {"status": "sent", "sent_at": now_iso(),
                                               "audience": payload.audience.model_dump(),
@@ -1606,6 +2727,569 @@ async def push_test(user: dict = Depends(get_current_user)):
     return {"sent": True}
 
 
+# ---------------------------------------------------------------------------
+# DofE Diary
+# ---------------------------------------------------------------------------
+
+class DofEDiaryEntryCreate(BaseModel):
+    section: str  # volunteering | skills | physical
+    week_date: str  # YYYY-MM-DD (Monday of the week)
+    content: str = Field(default="", max_length=10000)
+    model_config = ConfigDict(extra="ignore")
+
+
+class DofEDiaryEntryUpdate(BaseModel):
+    content: Optional[str] = Field(default=None, max_length=10000)
+
+
+DOFE_SECTIONS = {"volunteering", "skills", "physical"}
+
+
+def _week_monday(d: date) -> str:
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
+@api_router.get("/dofe/diary/prompt-check")
+async def dofe_diary_prompt_check(user: dict = Depends(get_current_user)):
+    if user["role"] != "cadet":
+        raise HTTPException(status_code=403, detail="Cadets only")
+    today = date.today()
+    weeks = [_week_monday(today - timedelta(weeks=i)) for i in range(4)]
+    missing = []
+    for week in weeks:
+        for section in ["volunteering", "skills", "physical"]:
+            entry = await db.dofe_diary.find_one(
+                {"cadet_id": user["id"], "section": section, "week_date": week},
+                {"_id": 0, "id": 1, "content": 1})
+            if not entry or not entry.get("content", "").strip():
+                missing.append({"week_date": week, "section": section})
+    return {"missing": missing}
+
+
+@api_router.get("/dofe/diary/export")
+async def export_dofe_diary(cadet_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    if user["role"] == "cadet":
+        cid = user["id"]
+    elif user["role"] in ("admin", "cfav"):
+        if not cadet_id:
+            raise HTTPException(status_code=400, detail="cadet_id required for staff access")
+        cid = cadet_id
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    cadet = await db.users.find_one({"id": cid}, {"_id": 0})
+    if not cadet:
+        raise HTTPException(status_code=404, detail="Cadet not found")
+    entries = await db.dofe_diary.find({"cadet_id": cid}, {"_id": 0}).sort("week_date", 1).to_list(500)
+    for e in entries:
+        e["files"] = await db.dofe_diary_files.find(
+            {"id": {"$in": e.get("file_ids", [])}}, {"_id": 0}).to_list(50)
+    try:
+        from reportlab.lib.pagesizes import A4 as _A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.lib import colors
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+        import io as _io
+    except Exception:
+        raise HTTPException(status_code=500, detail="PDF export dependency missing")
+    buf = _io.BytesIO()
+    pdf_doc = SimpleDocTemplate(buf, pagesize=_A4,
+                                rightMargin=2 * cm, leftMargin=2 * cm,
+                                topMargin=2.5 * cm, bottomMargin=2 * cm)
+    styles = getSampleStyleSheet()
+    navy = colors.HexColor("#002F5F")
+    red = colors.HexColor("#C80D30")
+    title_s = ParagraphStyle("dt", parent=styles["Heading1"], textColor=navy, fontSize=16, spaceAfter=4)
+    sub_s = ParagraphStyle("ds", parent=styles["Normal"], textColor=red, fontSize=11, spaceAfter=12)
+    body_s = ParagraphStyle("db", parent=styles["Normal"], fontSize=9, spaceAfter=4, leading=14)
+    week_s = ParagraphStyle("dw", parent=styles["Heading3"], textColor=navy, fontSize=10, spaceBefore=10, spaceAfter=4)
+    sec_s = ParagraphStyle("dse", parent=styles["Heading4"], textColor=red, fontSize=9, spaceBefore=6, spaceAfter=2)
+    empty_s = ParagraphStyle("de", parent=body_s, textColor=colors.grey)
+    file_s = ParagraphStyle("df", parent=body_s, textColor=colors.grey, fontSize=8)
+    cadet_name = f"{cadet.get('first_name', '')} {cadet.get('last_name', '')}".strip()
+    story = [
+        Paragraph("1471 Horwich Squadron RAF Air Cadets", title_s),
+        Paragraph(f"DofE Diary \u2014 {(cadet.get('dofe_level') or 'Unknown').title()} Award", sub_s),
+        Paragraph(f"Cadet: {cadet_name}", body_s),
+        Paragraph(f"Generated: {datetime.now().strftime('%d %b %Y %H:%M')} UTC", body_s),
+        HRFlowable(width="100%", thickness=2, color=navy, spaceAfter=12),
+    ]
+    from collections import defaultdict as _dd
+    by_week = _dd(dict)
+    for e in entries:
+        by_week[e["week_date"]][e["section"]] = e
+    for week_date in sorted(by_week.keys()):
+        try:
+            wd = date.fromisoformat(week_date)
+            week_label = f"Week of {wd.strftime('%d %b %Y')}"
+        except Exception:
+            week_label = week_date
+        story.append(Paragraph(week_label, week_s))
+        for sec in ["volunteering", "skills", "physical"]:
+            story.append(Paragraph(sec.title(), sec_s))
+            e = by_week[week_date].get(sec)
+            if e and e.get("content", "").strip():
+                for para in e["content"].split("\n"):
+                    if para.strip():
+                        story.append(Paragraph(para.strip(), body_s))
+            else:
+                story.append(Paragraph("(No entry)", empty_s))
+            if e and e.get("files"):
+                story.append(Paragraph(
+                    "Attachments: " + ", ".join(f["filename"] for f in e["files"]), file_s))
+        story.append(Spacer(1, 6))
+    pdf_doc.build(story)
+    buf.seek(0)
+    safe = cadet_name.replace(" ", "_") or "cadet"
+    return Response(content=buf.read(), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="DofE_Diary_{safe}.pdf"'})
+
+
+@api_router.get("/dofe/diary")
+async def get_dofe_diary(cadet_id: Optional[str] = None, user: dict = Depends(get_current_user)):
+    if user["role"] == "cadet":
+        cid = user["id"]
+    elif user["role"] in ("admin", "cfav"):
+        if not cadet_id:
+            raise HTTPException(status_code=400, detail="cadet_id required for staff access")
+        cid = cadet_id
+    else:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    entries = await db.dofe_diary.find({"cadet_id": cid}, {"_id": 0}).sort("week_date", -1).to_list(500)
+    for e in entries:
+        e["files"] = await db.dofe_diary_files.find(
+            {"id": {"$in": e.get("file_ids", [])}}, {"_id": 0}).to_list(50)
+    return entries
+
+
+@api_router.post("/dofe/diary")
+async def upsert_dofe_diary_entry(payload: DofEDiaryEntryCreate, user: dict = Depends(get_current_user)):
+    if user["role"] != "cadet":
+        raise HTTPException(status_code=403, detail="Cadets only")
+    if payload.section not in DOFE_SECTIONS:
+        raise HTTPException(status_code=400, detail="Invalid section")
+    try:
+        d = date.fromisoformat(payload.week_date)
+        if d.weekday() != 0:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(status_code=400, detail="week_date must be a Monday in YYYY-MM-DD format")
+    existing = await db.dofe_diary.find_one(
+        {"cadet_id": user["id"], "section": payload.section, "week_date": payload.week_date},
+        {"_id": 0})
+    if existing:
+        await db.dofe_diary.update_one(
+            {"id": existing["id"]},
+            {"$set": {"content": payload.content, "updated_at": now_iso()}})
+        return {**existing, "content": payload.content, "updated_at": now_iso(),
+                "files": await db.dofe_diary_files.find(
+                    {"id": {"$in": existing.get("file_ids", [])}}, {"_id": 0}).to_list(50)}
+    doc = {
+        "id": str(uuid.uuid4()), "cadet_id": user["id"],
+        "section": payload.section, "week_date": payload.week_date,
+        "content": payload.content, "file_ids": [],
+        "created_at": now_iso(), "updated_at": now_iso(),
+    }
+    await db.dofe_diary.insert_one(doc)
+    return {**{k: v for k, v in doc.items() if k != "_id"}, "files": []}
+
+
+@api_router.post("/dofe/diary/{entry_id}/upload")
+async def upload_dofe_diary_file(
+        entry_id: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    entry = await db.dofe_diary.find_one({"id": entry_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if entry["cadet_id"] != user["id"] and user["role"] not in ("admin", "cfav"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 15 MB).")
+    fid = str(uuid.uuid4())
+    gid = await fs.upload_from_stream(
+        file.filename or "file", data,
+        metadata={"dofe_file_id": fid, "content_type": file.content_type})
+    fdoc = {
+        "id": fid, "entry_id": entry_id,
+        "filename": file.filename or "file",
+        "content_type": file.content_type or "application/octet-stream",
+        "size": len(data), "gridfs_id": str(gid),
+        "uploaded_by": user["id"], "created_at": now_iso(),
+    }
+    await db.dofe_diary_files.insert_one(fdoc)
+    await db.dofe_diary.update_one({"id": entry_id}, {"$push": {"file_ids": fid}})
+    return {k: v for k, v in fdoc.items() if k != "_id"}
+
+
+@api_router.get("/dofe/diary/files/{file_id}/download")
+async def download_dofe_diary_file(file_id: str, user: dict = Depends(get_current_user)):
+    fdoc = await db.dofe_diary_files.find_one({"id": file_id}, {"_id": 0})
+    if not fdoc:
+        raise HTTPException(status_code=404, detail="File not found")
+    entry = await db.dofe_diary.find_one({"id": fdoc["entry_id"]}, {"_id": 0, "cadet_id": 1})
+    if entry and entry["cadet_id"] != user["id"] and user["role"] not in ("admin", "cfav"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    stream = await fs.open_download_stream(ObjectId(fdoc["gridfs_id"]))
+    data = await stream.read()
+    return Response(content=data, media_type=fdoc["content_type"],
+                    headers={"Content-Disposition": f'inline; filename="{fdoc["filename"]}"'})
+
+
+@api_router.delete("/dofe/diary/{entry_id}/files/{file_id}")
+async def delete_dofe_diary_file(
+        entry_id: str, file_id: str, user: dict = Depends(get_current_user)):
+    entry = await db.dofe_diary.find_one({"id": entry_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    if entry["cadet_id"] != user["id"] and user["role"] not in ("admin",):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    fdoc = await db.dofe_diary_files.find_one({"id": file_id, "entry_id": entry_id})
+    if not fdoc:
+        raise HTTPException(status_code=404, detail="File not found")
+    try:
+        await fs.delete(ObjectId(fdoc["gridfs_id"]))
+    except Exception:
+        pass
+    await db.dofe_diary_files.delete_one({"id": file_id})
+    await db.dofe_diary.update_one({"id": entry_id}, {"$pull": {"file_ids": file_id}})
+    return {"deleted": True}
+
+
+# ---------------------------------------------------------------------------
+# Facebook Posts Integration
+# ---------------------------------------------------------------------------
+
+FACEBOOK_GRAPH_URL = "https://graph.facebook.com/v19.0"
+FACEBOOK_PUBLIC_SCAN_URL = "https://r.jina.ai/http://www.facebook.com/1471HorwichRAFAC/"
+_facebook_public_cache = {"at": None, "posts": []}
+
+
+class FBConfig(BaseModel):
+    page_id: str = Field(..., min_length=1)
+    access_token: str = Field(..., min_length=1)
+
+
+async def _get_fb_config() -> Optional[dict]:
+    return await db.settings.find_one({"key": "facebook"}, {"_id": 0})
+
+
+async def _do_fb_sync(config: dict) -> int:
+    """Fetch public posts from the Graph API and upsert into fb_posts collection."""
+    v = config.get("value", {})
+    page_id = v.get("page_id", "")
+    token = v.get("access_token", "")
+    if not page_id or not token:
+        return 0
+    fields = "id,message,story,created_time,full_picture,permalink_url"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        resp = await client.get(
+            f"{FACEBOOK_GRAPH_URL}/{page_id}/posts",
+            params={"fields": fields, "access_token": token, "limit": 30},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    synced = 0
+    for p in data.get("data", []):
+        text = (p.get("message") or p.get("story") or "").strip()
+        if not text:
+            continue
+        doc = {
+            "fb_id": p["id"],
+            "message": text,
+            "created_time": p.get("created_time", ""),
+            "full_picture": p.get("full_picture"),
+            "permalink_url": p.get("permalink_url", ""),
+            "synced_at": now_iso(),
+        }
+        await db.fb_posts.update_one({"fb_id": p["id"]}, {"$set": doc}, upsert=True)
+        synced += 1
+    await db.settings.update_one(
+        {"key": "facebook"},
+        {"$set": {"last_sync": now_iso()}},
+    )
+    return synced
+
+
+def _clean_fb_link(url: str) -> str:
+    link = (url or "").strip()
+    if not link:
+        return ""
+    link = link.replace("http://www.facebook.com", "https://www.facebook.com")
+    link = link.replace("http://facebook.com", "https://www.facebook.com")
+    return link
+
+
+def _headline_from_text(text: str) -> str:
+    base = re.sub(r"\s+", " ", (text or "").strip())
+    if not base:
+        return "Facebook post"
+    if len(base) <= 90:
+        return base
+    return f"{base[:87].rstrip()}..."
+
+
+def _extract_public_fb_posts(markdown: str, limit: int) -> List[dict]:
+    # The mirrored page is markdown-like content; each recent post appears as
+    # "## **[Page Name](...)** ..." followed by a relative time link and media.
+    blocks = markdown.split("\n## **[")
+    out: List[dict] = []
+    seen = set()
+    for idx, raw in enumerate(blocks):
+        if idx == 0:
+            continue
+        block = f"## **[{raw}"
+        action_match = re.search(r"\*\*\s*(.+?)\n", block)
+        action_text = (action_match.group(1) if action_match else "").strip()
+
+        link_match = re.search(r"\n\[([^\]]+)\]\((https?://[^\)]+/posts/[^\)]+)\)", block)
+        if not link_match:
+            link_match = re.search(r"\n\[([^\]]+)\]\((https?://[^\)]+/photo/\?fbid=[^\)]+)\)", block)
+        if not link_match:
+            continue
+
+        time_label = (link_match.group(1) or "").strip()
+        permalink = _clean_fb_link(link_match.group(2))
+        if not permalink or permalink in seen:
+            continue
+        seen.add(permalink)
+
+        image_match = re.search(r"!\[[^\]]+\]\((https?://[^\)]+)\)", block)
+        image_url = image_match.group(1).strip() if image_match else ""
+
+        out.append({
+            "fb_id": permalink.split("/")[-1][:80],
+            "headline": _headline_from_text(action_text),
+            "permalink_url": permalink,
+            "full_picture": image_url,
+            "created_time": "",
+            "time_label": time_label,
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def _scan_public_fb_posts(limit: int = 5) -> List[dict]:
+    now = datetime.now(timezone.utc)
+    cached_at = _facebook_public_cache.get("at")
+    cached_posts = _facebook_public_cache.get("posts") or []
+    if cached_at and (now - cached_at).total_seconds() < 900 and cached_posts:
+        return cached_posts[:limit]
+
+    async with httpx.AsyncClient(timeout=25.0) as client:
+        resp = await client.get(FACEBOOK_PUBLIC_SCAN_URL)
+        resp.raise_for_status()
+        md = resp.text
+
+    posts = _extract_public_fb_posts(md, limit)
+    if not posts:
+        posts = [{
+            "fb_id": "fallback-page-link",
+            "headline": "See our latest posts on Facebook",
+            "permalink_url": "https://www.facebook.com/1471HorwichRAFAC/",
+            "full_picture": "",
+            "created_time": "",
+            "time_label": "",
+        }]
+    _facebook_public_cache["at"] = now
+    _facebook_public_cache["posts"] = posts
+    return posts[:limit]
+
+
+@api_router.get("/facebook/config")
+async def get_fb_config(admin: dict = Depends(require_roles("admin"))):
+    doc = await _get_fb_config()
+    count = await db.fb_posts.count_documents({})
+    if not doc:
+        return {"page_id": "", "has_token": False, "last_sync": None, "post_count": count}
+    v = doc.get("value", {})
+    return {
+        "page_id": v.get("page_id", ""),
+        "has_token": bool(v.get("access_token")),
+        "last_sync": doc.get("last_sync"),
+        "post_count": count,
+    }
+
+
+@api_router.put("/facebook/config")
+async def update_fb_config(payload: FBConfig, admin: dict = Depends(require_roles("admin"))):
+    await db.settings.update_one(
+        {"key": "facebook"},
+        {"$set": {
+            "key": "facebook",
+            "value": {"page_id": payload.page_id, "access_token": payload.access_token},
+        }},
+        upsert=True,
+    )
+    return {"saved": True}
+
+
+@api_router.post("/facebook/sync")
+async def sync_fb_posts(admin: dict = Depends(require_roles("admin"))):
+    config = await _get_fb_config()
+    if not config or not config.get("value", {}).get("access_token"):
+        raise HTTPException(
+            status_code=400,
+            detail="Facebook not configured. Set your page ID and access token first.",
+        )
+    try:
+        count = await _do_fb_sync(config)
+        return {"synced": count, "ok": True}
+    except httpx.HTTPStatusError as e:
+        detail = f"Facebook API error {e.response.status_code}"
+        try:
+            body = e.response.json()
+            msg = body.get("error", {}).get("message", "")
+            if msg:
+                detail += f": {msg}"
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=detail)
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Could not reach Facebook: {e}")
+
+
+@api_router.get("/facebook/posts")
+async def get_fb_posts(background_tasks: BackgroundTasks, limit: int = 20):
+    """Public: return cached posts; auto-refresh in background if stale (>2 h)."""
+    config = await _get_fb_config()
+    if config and config.get("value", {}).get("access_token"):
+        last = config.get("last_sync")
+        needs = True
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                needs = (datetime.now(timezone.utc) - last_dt).total_seconds() > 900
+            except Exception:
+                needs = True
+        if needs:
+            background_tasks.add_task(_do_fb_sync, config)
+    posts = await db.fb_posts.find(
+        {"message": {"$ne": ""}},
+        {"_id": 0},
+    ).sort("created_time", -1).to_list(min(limit, 5))
+    return posts
+
+
+@api_router.get("/facebook/public-scan")
+async def get_fb_public_scan(limit: int = 5):
+    lim = max(1, min(limit, 8))
+    try:
+        posts = await _scan_public_fb_posts(lim)
+        return posts
+    except Exception as e:
+        logger.warning("Public Facebook scan failed: %s", e)
+        return [{
+            "fb_id": "fallback-page-link",
+            "headline": "See our latest posts on Facebook",
+            "permalink_url": "https://www.facebook.com/1471HorwichRAFAC/",
+            "full_picture": "",
+            "created_time": "",
+            "time_label": "",
+        }]
+
+
+# ---------------------------------------------------------------------------
+# Custom Activities (admin-managed, stored in MongoDB)
+# ---------------------------------------------------------------------------
+
+CUSTOM_ACTIVITY_ICONS = [
+    "Plane", "Wind", "Mountain", "Award", "HeartPulse", "Compass", "Tent",
+    "Trophy", "TentTree", "Shield", "BookOpen", "HeartHandshake", "GraduationCap",
+    "Users", "Target", "Rocket", "Globe2", "Sparkles", "Star", "Briefcase",
+    "Camera", "Music", "Wrench", "Flag", "Zap",
+]
+
+
+class CustomActivityCreate(BaseModel):
+    slug: str = Field(..., min_length=1, pattern=r"^[a-z0-9-]+$")
+    title: str = Field(..., min_length=1)
+    strapline: str = Field(default="")
+    text: str = Field(default="")
+    long: List[str] = []
+    highlights: List[str] = []
+    quick_facts: List[str] = []
+    what_to_expect: List[str] = []
+    image_url: str = Field(default="")
+    icon_name: str = Field(default="Compass")
+    published: bool = True
+    model_config = ConfigDict(extra="ignore")
+
+
+class CustomActivityUpdate(BaseModel):
+    title: Optional[str] = None
+    strapline: Optional[str] = None
+    text: Optional[str] = None
+    long: Optional[List[str]] = None
+    highlights: Optional[List[str]] = None
+    quick_facts: Optional[List[str]] = None
+    what_to_expect: Optional[List[str]] = None
+    image_url: Optional[str] = None
+    icon_name: Optional[str] = None
+    published: Optional[bool] = None
+
+
+@api_router.get("/activities/custom")
+async def list_custom_activities(include_unpublished: bool = False,
+                                  user: Optional[dict] = Depends(get_current_user) if False else None):
+    q = {} if include_unpublished else {"published": True}
+    rows = await db.custom_activities.find(q, {"_id": 0}).sort("title", 1).to_list(200)
+    return rows
+
+
+@api_router.get("/activities/custom/{slug}")
+async def get_custom_activity(slug: str):
+    act = await db.custom_activities.find_one({"slug": slug}, {"_id": 0})
+    if not act:
+        raise HTTPException(status_code=404, detail="Custom activity not found")
+    return act
+
+
+@api_router.post("/activities/custom")
+async def create_custom_activity(
+        payload: CustomActivityCreate,
+        staff: dict = Depends(require_privileged_staff)):
+    existing = await db.custom_activities.find_one({"slug": payload.slug})
+    if existing:
+        raise HTTPException(status_code=400, detail="An activity with this slug already exists")
+    doc = {
+        "id": str(uuid.uuid4()),
+        **payload.model_dump(),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "created_by": staff["id"],
+    }
+    await db.custom_activities.insert_one(doc)
+    return {k: v for k, v in doc.items() if k != "_id"}
+
+
+@api_router.patch("/activities/custom/{slug}")
+async def update_custom_activity(
+        slug: str,
+        payload: CustomActivityUpdate,
+        staff: dict = Depends(require_privileged_staff)):
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    updates["updated_at"] = now_iso()
+    result = await db.custom_activities.find_one_and_update(
+        {"slug": slug}, {"$set": updates},
+        projection={"_id": 0}, return_document=True)
+    if not result:
+        raise HTTPException(status_code=404, detail="Custom activity not found")
+    return result
+
+
+@api_router.delete("/activities/custom/{slug}")
+async def delete_custom_activity(
+        slug: str,
+        staff: dict = Depends(require_privileged_staff)):
+    res = await db.custom_activities.delete_one({"slug": slug})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Custom activity not found")
+    return {"deleted": True}
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -1615,6 +3299,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_progression_task = None
+
+
+async def _progression_alert_loop():
+    while True:
+        try:
+            await _send_classification_stagnation_alerts()
+        except Exception as exc:  # pragma: no cover
+            logger.error("Progression alert loop failed: %s", exc)
+        await asyncio.sleep(12 * 60 * 60)
 
 
 # ---------------------------------------------------------------------------
@@ -1639,9 +3334,12 @@ async def seed_users():
             await db.users.insert_one({
                 "id": uid, "email": d["email"], "password_hash": hash_password(d["password"]),
                 "role": d["role"], "first_name": d["first_name"], "last_name": d["last_name"],
+                "is_uniformed": True if d["role"] == "cfav" else None,
                 "child_ids": [], "bonus_points": 0, "created_at": now_iso()})
             ids[d["role"]] = uid
         else:
+            if d["role"] == "cfav" and "is_uniformed" not in existing:
+                await db.users.update_one({"email": d["email"]}, {"$set": {"is_uniformed": True}})
             if not verify_password(d["password"], existing["password_hash"]):
                 await db.users.update_one({"email": d["email"]},
                                           {"$set": {"password_hash": hash_password(d["password"])}})
@@ -1662,17 +3360,29 @@ async def seed_users():
 
 @app.on_event("startup")
 async def on_startup():
+    global _progression_task
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.users.create_index([("role", 1), ("is_uniformed", 1)])
     await db.events.create_index("start")
     await db.notice_acks.create_index([("notice_id", 1), ("user_id", 1)], unique=True)
     await db.messages.create_index("member_id")
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.documents.create_index([("visible_roles", 1), ("created_at", -1)])
     await db.push_subscriptions.create_index("endpoint", unique=True)
+    await db.cadet_tracker.create_index("tracker_key", unique=True)
+    await db.cadet_tracker.create_index("user_id")
+    await db.cadet_progress_alerts.create_index("cadet_id", unique=True)
+    await db.cfav_availability.create_index([("parade_date", 1), ("cfav_id", 1)])
+    await db.cfav_event_ideas.create_index([("parade_date", 1), ("created_at", -1)])
+    await db.cfav_skill_matrix.create_index("cfav_id", unique=True)
     await seed_users()
+    _progression_task = asyncio.create_task(_progression_alert_loop())
 
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    global _progression_task
+    if _progression_task:
+        _progression_task.cancel()
     client.close()

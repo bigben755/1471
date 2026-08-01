@@ -29,7 +29,7 @@ export default function NewsDetailPage() {
       <section className="relative bg-raf-navy text-white overflow-hidden">
         {post.cover_image_url && (
           <div className="absolute inset-0">
-            <img src={imgUrl(post.cover_image_url)} alt={post.title} className="w-full h-full object-cover" />
+            <img src={imgUrl(post.cover_image_url)} alt={post.title} className="w-full h-full object-cover object-top" />
             <div className="absolute inset-0 bg-gradient-to-r from-raf-navy via-raf-navy/85 to-raf-navy/55" />
           </div>
         )}

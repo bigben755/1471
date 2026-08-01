@@ -6,8 +6,8 @@ export default function FaqPage() {
   return (
     <div data-testid="faq-page">
       <Seo
-        title="FAQ | 1471 Horwich Squadron RAF Air Cadets"
-        description="Frequently asked questions about RAF Air Cadets in Horwich, including joining age, flying, DofE, parade nights, parent guidance, volunteering routes and where to send enquiries."
+        title="FAQ | 1471 Horwich Squadron RAF Air Cadets in Horwich"
+        description="Frequently asked questions about joining age, parade nights, flying, DofE, volunteering, parent guidance and enquiries for 1471 Horwich Squadron RAF Air Cadets."
         faqs={FAQS}
       />
       <Faq />

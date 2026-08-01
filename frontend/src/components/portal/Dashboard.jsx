@@ -18,14 +18,30 @@ import { MemberDocumentsPanel } from "./MemberDocumentsPanel";
 import { BlogAdminPanel } from "./BlogAdminPanel";
 import { MemberNewsPanel } from "./MemberNewsPanel";
 import { PwaManager } from "./PwaManager";
+import { SiteContentPanel } from "./SiteContentPanel";
+import { SmsSupportPanel } from "./SmsSupportPanel";
+import { TrainingPlanningPanel } from "./TrainingPlanningPanel";
+import { DofEDiaryPanel } from "./DofEDiaryPanel";
+import { CustomActivitiesPanel } from "./CustomActivitiesPanel";
 import {
-  CalendarDays, Award, Bell, MessageSquare, Users, Inbox, Settings, UserSearch, Megaphone, Mail, FolderOpen, Newspaper,
+  CalendarDays, Award, Bell, MessageSquare, Users, Inbox, Settings, UserSearch, Megaphone, Mail, FolderOpen, Newspaper, FilePenLine, KeyRound, ClipboardList, BookOpen, LayoutGrid,
 } from "lucide-react";
 
 const TABS = {
   cadet: [
     { key: "calendar", label: "Calendar", icon: CalendarDays },
     { key: "points", label: "Points", icon: Award },
+    { key: "notices", label: "Notices", icon: Bell },
+    { key: "documents", label: "Documents", icon: FolderOpen },
+    { key: "news", label: "News", icon: Newspaper },
+    { key: "inbox", label: "Inbox", icon: Mail },
+    { key: "messages", label: "Messages", icon: MessageSquare },
+    { key: "account", label: "Account", icon: Settings },
+  ],
+  cadet_dofe: [
+    { key: "calendar", label: "Calendar", icon: CalendarDays },
+    { key: "points", label: "Points", icon: Award },
+    { key: "dofe", label: "DofE Diary", icon: BookOpen },
     { key: "notices", label: "Notices", icon: Bell },
     { key: "documents", label: "Documents", icon: FolderOpen },
     { key: "news", label: "News", icon: Newspaper },
@@ -45,12 +61,25 @@ const TABS = {
   staff: [
     { key: "calendar", label: "Events", icon: CalendarDays },
     { key: "members", label: "Members", icon: Users },
+    { key: "training", label: "Training", icon: ClipboardList },
     { key: "recruitment", label: "Recruitment", icon: UserSearch },
+    { key: "sms_support", label: "SMS Support", icon: KeyRound },
     { key: "notices", label: "Notices", icon: Bell },
     { key: "documents", label: "Documents", icon: FolderOpen },
     { key: "news", label: "News", icon: Newspaper },
     { key: "comms", label: "Comms", icon: Megaphone },
     { key: "enquiries", label: "Enquiries", icon: Inbox },
+    { key: "messages", label: "Messages", icon: MessageSquare },
+    { key: "inbox", label: "Inbox", icon: Mail },
+    { key: "account", label: "Account", icon: Settings },
+  ],
+  cfav_non_uniformed: [
+    { key: "calendar", label: "Events", icon: CalendarDays },
+    { key: "training", label: "Training", icon: ClipboardList },
+    { key: "sms_support", label: "SMS Support", icon: KeyRound },
+    { key: "notices", label: "Notices", icon: Bell },
+    { key: "documents", label: "Documents", icon: FolderOpen },
+    { key: "news", label: "News", icon: Newspaper },
     { key: "messages", label: "Messages", icon: MessageSquare },
     { key: "inbox", label: "Inbox", icon: Mail },
     { key: "account", label: "Account", icon: Settings },
@@ -61,7 +90,13 @@ export const Dashboard = () => {
   const { user } = useAuth();
   const role = user.role;
   const isStaff = role === "admin" || role === "cfav";
-  const tabs = isStaff ? TABS.staff : TABS[role];
+  const isAdmin = role === "admin";
+  const isUniformedCfav = role === "cfav" && !!user?.is_uniformed;
+  const tabs = isStaff
+    ? (isAdmin
+      ? [...TABS.staff, { key: "website", label: "Website", icon: FilePenLine }, { key: "activities", label: "Activities", icon: LayoutGrid }]
+      : (isUniformedCfav ? TABS.staff : TABS.cfav_non_uniformed))
+    : (role === "cadet" && user?.dofe_level ? TABS.cadet_dofe : TABS[role]);
   const [active, setActive] = useState(tabs[0].key);
   const [unread, setUnread] = useState(0);
 
@@ -92,13 +127,18 @@ export const Dashboard = () => {
       case "notices": return <NoticesPanel canManage={isStaff} />;
       case "messages": return isStaff ? <StaffMessagesPanel /> : <MessagesPanel />;
       case "members": return <ManageUsersPanel />;
+      case "training": return <TrainingPlanningPanel />;
+      case "dofe": return <DofEDiaryPanel />;
       case "recruitment": return <RecruitmentPanel />;
+      case "sms_support": return <SmsSupportPanel />;
       case "comms": return <CommsPanel />;
       case "documents": return isStaff ? <DocumentsPanel /> : <MemberDocumentsPanel />;
       case "news": return isStaff ? <BlogAdminPanel /> : <MemberNewsPanel />;
       case "enquiries": return <EnquiriesPanel />;
       case "inbox": return <NotificationsPanel onRead={() => { setUnread(0); if (navigator.clearAppBadge) navigator.clearAppBadge(); }} />;
       case "account": return <AccountPanel />;
+      case "website": return <SiteContentPanel />;
+      case "activities": return <CustomActivitiesPanel />;
       default: return null;
     }
   };

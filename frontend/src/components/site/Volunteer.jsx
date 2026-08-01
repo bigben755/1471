@@ -756,6 +756,48 @@ export const Volunteer = () => {
           </div>
         </Reveal>
 
+        {/* Staff Development */}
+        <Reveal>
+          <div className="mt-20">
+            <div className="max-w-3xl mb-10">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-raf-red">
+                Staff development
+              </p>
+              <h3 className="mt-3 font-display text-3xl font-bold text-raf-navy md:text-4xl">
+                We invest in our volunteers too
+              </h3>
+              <p className="mt-5 leading-relaxed text-raf-slate">
+                RAF Air Cadets volunteers receive training, qualifications and
+                personal development alongside their cadets. From gaining
+                specialist appointments to attending officer commissioning
+                courses, the organisation is committed to helping its staff
+                grow in skill, confidence and responsibility.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {[
+                { src: "/squadron/staff_development/staff development - commission 2.jpg", caption: "Officer commissioning" },
+                { src: "/squadron/staff_development/staff development - commission 3.jpg", caption: "Commissioning ceremony" },
+                { src: "/squadron/staff_development/staff development - fieldcraft officer.jpg", caption: "Fieldcraft Officer training" },
+                { src: "/squadron/staff_development/staff development - shooting officer.jpg", caption: "Shooting Officer qualification" },
+                { src: "/squadron/staff_development/stem 1.jpg", caption: "STEM Officer delivering training" },
+              ].map((img, i) => (
+                <div key={i} className="group relative aspect-square overflow-hidden bg-raf-navy/10">
+                  <img
+                    src={img.src}
+                    alt={img.caption}
+                    loading="lazy"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-raf-navy/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
+                    <span className="text-white text-xs font-medium leading-snug">{img.caption}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Reveal>
+
         {/* Final CTA */}
         <Reveal>
           <div className="relative mt-20 overflow-hidden bg-raf-navy px-7 py-12 text-center md:px-12 md:py-16">

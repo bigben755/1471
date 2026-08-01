@@ -5,8 +5,8 @@ export default function ParentsPage() {
   return (
     <div data-testid="parents-page">
       <Seo
-        title="For Parents & Carers | 1471 Horwich Squadron RAF Air Cadets"
-        description="Information for parents and carers about RAF Air Cadets in Horwich, including joining steps, structure, supervision, safeguarding context, communication and the wider opportunities cadets can access."
+        title="Parents and Carers | 1471 Horwich Squadron RAF Air Cadets"
+        description="Guidance for parents and carers on joining steps, parade structure, safeguarding context, communication and opportunities at 1471 Horwich Squadron."
       />
       <Parents />
     </div>

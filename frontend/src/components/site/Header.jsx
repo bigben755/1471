@@ -118,7 +118,7 @@ export const Header = () => {
               key={item.to}
               data-testid={`mobile-nav-${item.label.toLowerCase()}`}
               onClick={() => go(item.to)}
-              className="text-left py-4 text-2xl font-display font-bold text-white border-b border-white/10 hover:text-raf-red transition-colors"
+              className="text-left py-4 text-2xl font-display font-bold text-white border-b border-white/10 hover:text-raf-red hover:pl-2 transition-all duration-200"
             >
               {item.label}
             </button>
@@ -126,10 +126,16 @@ export const Header = () => {
           <a
             data-testid="mobile-nav-signin"
             href="/portal"
-            className="text-left py-4 text-2xl font-display font-bold text-raf-sky border-b border-white/10 hover:text-raf-red transition-colors"
+            className="text-left py-4 text-2xl font-display font-bold text-raf-sky border-b border-white/10 hover:text-raf-red hover:pl-2 transition-all duration-200"
           >
             Members sign in
           </a>
+          <button
+            onClick={() => go("/join")}
+            className="mt-6 w-full py-4 bg-raf-red text-white font-display font-bold text-xl text-center animate-pulse-cta hover:bg-[#A00926] transition-colors"
+          >
+            Join as a Cadet &rarr;
+          </button>
         </nav>
       </div>
     </header>

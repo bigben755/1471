@@ -41,7 +41,7 @@ export const Parents = () => {
             <img
               src={PARENTS_IMG}
               alt="Cadets recognised at a 1471 Squadron presentation evening"
-              className="w-full aspect-[4/3] object-cover"
+              className="w-full aspect-[4/3] object-cover object-top"
             />
             <div className="absolute bottom-0 left-0 h-1.5 w-24 bg-raf-red" />
           </div>

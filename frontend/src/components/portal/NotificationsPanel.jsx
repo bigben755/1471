@@ -45,11 +45,26 @@ export const NotificationsPanel = ({ onRead }) => {
                       {n.channels?.includes("email") && <span className="text-[10px] uppercase bg-raf-sky text-raf-blue px-2 py-0.5 flex items-center gap-1"><Mail size={10} /> Emailed</span>}
                     </div>
                     <p className="mt-2 text-raf-slate leading-relaxed whitespace-pre-line text-sm">{n.body}</p>
-                    {n.link && (
+                    {Array.isArray(n.links) && n.links.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2" data-testid={`notification-links-${n.id}`}>
+                        {n.links.map((l, i) => (
+                          <a
+                            key={`${n.id}-${i}`}
+                            data-testid={`notification-link-${n.id}-${i}`}
+                            href={(l.url || "").startsWith("/api") ? `${BASE_URL}${l.url}` : l.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-raf-red text-white hover:bg-[#A00926] transition-colors"
+                          >
+                            <Download size={14} /> {l.label || "Open"}
+                          </a>
+                        ))}
+                      </div>
+                    ) : n.link ? (
                       <a data-testid={`notification-link-${n.id}`} href={n.link.startsWith("/api") ? `${BASE_URL}${n.link}` : n.link} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-sm bg-raf-red text-white hover:bg-[#A00926] transition-colors">
                         <Download size={14} /> {n.link_label || "Open"}
                       </a>
-                    )}
+                    ) : null}
                     <div className="mt-3 text-xs text-raf-slate">
                       {n.from_name} &middot; {new Date(n.created_at).toLocaleString("en-GB")}
                     </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
@@ -8,9 +8,76 @@ import {
 } from "../ui/dialog";
 import {
   Send, Newspaper, MessageSquare, Loader2, Plus, Pencil, Trash2, Eye, Mail, Monitor,
+  Paperclip, X,
 } from "lucide-react";
 
 const inp = "w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm";
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
+
+const AttachmentPicker = ({ attachments, setAttachments, testId = "comms-attachment" }) => {
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const uploadFiles = async (files) => {
+    setUploading(true);
+    try {
+      for (const f of files) {
+        const fd = new FormData();
+        fd.append("file", f);
+        const { data } = await api.post("/attachments", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setAttachments((a) => [...a, { id: data.id, filename: data.filename }]);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  return (
+    <div>
+      <div className="text-xs font-semibold text-raf-navy mb-1">Attachments (optional)</div>
+      <input
+        ref={fileRef}
+        type="file"
+        multiple
+        data-testid={`${testId}-input`}
+        className="hidden"
+        onChange={(e) => uploadFiles(Array.from(e.target.files || []))}
+      />
+      <button
+        type="button"
+        data-testid={`${testId}-add`}
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-raf-sky text-raf-blue hover:border-raf-blue transition-colors disabled:opacity-60"
+      >
+        {uploading ? <Loader2 className="animate-spin" size={13} /> : <Paperclip size={13} />} Add file
+      </button>
+      {attachments.length > 0 && (
+        <ul className="mt-2 space-y-1" data-testid={`${testId}-list`}>
+          {attachments.map((a) => (
+            <li key={a.id} className="flex items-center gap-2 text-xs bg-raf-sky/40 px-2 py-1.5">
+              <Paperclip size={12} className="text-raf-blue" />
+              <span className="truncate text-raf-navy">{a.filename}</span>
+              <button
+                type="button"
+                onClick={() => setAttachments((x) => x.filter((y) => y.id !== a.id))}
+                className="ml-auto text-raf-red hover:text-raf-navy"
+              >
+                <X size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1 text-xs text-raf-slate">Files are sent as secure download links. Max 15MB each.</p>
+    </div>
+  );
+};
 
 const ChannelToggles = ({ channels, setChannels }) => {
   const toggle = (c) => setChannels((cs) => cs.includes(c) ? cs.filter((x) => x !== c) : [...cs, c]);
@@ -30,6 +97,7 @@ const BroadcastForm = ({ users }) => {
   const [form, setForm] = useState({ title: "", body: "" });
   const [audience, setAudience] = useState(emptyAudience());
   const [channels, setChannels] = useState(["dashboard"]);
+  const [attachments, setAttachments] = useState([]);
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
@@ -38,12 +106,19 @@ const BroadcastForm = ({ users }) => {
     if (channels.length === 0) { toast.error("Choose at least one channel."); return; }
     setBusy(true);
     try {
-      const { data } = await api.post("/broadcast", { ...form, audience, channels });
+      const { data } = await api.post("/broadcast", {
+        ...form,
+        audience,
+        channels,
+        attachment_ids: attachments.map((a) => a.id),
+        base_url: BASE_URL,
+      });
       toast.success(`Sent to ${data.recipients} recipient(s).`, {
         description: `${data.dashboard_delivered} to dashboards, ${data.emails_sent} email(s) sent.`,
       });
       setForm({ title: "", body: "" });
       setAudience(emptyAudience());
+      setAttachments([]);
     } catch (err) { toast.error(err.response?.data?.detail || "Could not send."); }
     finally { setBusy(false); }
   };
@@ -60,6 +135,7 @@ const BroadcastForm = ({ users }) => {
         <div className="text-xs font-semibold text-raf-navy mb-2">Deliver via</div>
         <ChannelToggles channels={channels} setChannels={setChannels} />
       </div>
+      <AttachmentPicker attachments={attachments} setAttachments={setAttachments} testId="broadcast-attachment" />
       <button data-testid="broadcast-send" onClick={send} disabled={busy} className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors disabled:opacity-60">
         {busy ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />} Send
       </button>
@@ -70,6 +146,7 @@ const BroadcastForm = ({ users }) => {
 const NewsletterMode = ({ users }) => {
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [attachmentNames, setAttachmentNames] = useState({});
   const [compose, setCompose] = useState(null); // {id?, subject, heading, intro, body}
   const [previewHtml, setPreviewHtml] = useState(null);
   const [sendFor, setSendFor] = useState(null); // newsletter being sent
@@ -83,11 +160,27 @@ const NewsletterMode = ({ users }) => {
   }, []);
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    api.get("/attachments")
+      .then(({ data }) => {
+        const map = {};
+        data.forEach((a) => { map[a.id] = a.filename; });
+        setAttachmentNames(map);
+      })
+      .catch(() => {});
+  }, []);
+
   const saveDraft = async () => {
     if (!compose.subject || !compose.body) { toast.error("Subject and body are required."); return; }
     setBusy(true);
     try {
-      const payload = { subject: compose.subject, heading: compose.heading || "", intro: compose.intro || "", body: compose.body };
+      const payload = {
+        subject: compose.subject,
+        heading: compose.heading || "",
+        intro: compose.intro || "",
+        body: compose.body,
+        attachment_ids: compose.attachment_ids || [],
+      };
       if (compose.id) await api.patch(`/newsletters/${compose.id}`, payload);
       else await api.post("/newsletters", payload);
       toast.success("Newsletter saved.");
@@ -99,7 +192,11 @@ const NewsletterMode = ({ users }) => {
   const preview = async (nl) => {
     try {
       const { data } = await api.post("/newsletters/preview", {
-        subject: nl.subject, heading: nl.heading || "", intro: nl.intro || "", body: nl.body,
+        subject: nl.subject,
+        heading: nl.heading || "",
+        intro: nl.intro || "",
+        body: nl.body,
+        attachment_ids: nl.attachment_ids || [],
       });
       setPreviewHtml(data.html);
     } catch { toast.error("Could not build preview."); }
@@ -115,7 +212,7 @@ const NewsletterMode = ({ users }) => {
     if (channels.length === 0) { toast.error("Choose at least one channel."); return; }
     setBusy(true);
     try {
-      const { data } = await api.post(`/newsletters/${sendFor.id}/send`, { audience, channels });
+      const { data } = await api.post(`/newsletters/${sendFor.id}/send`, { audience, channels, base_url: BASE_URL });
       toast.success(`Newsletter sent to ${data.recipients} recipient(s).`, {
         description: `${data.dashboard_delivered} to dashboards, ${data.emails_sent} email(s) sent.`,
       });
@@ -127,7 +224,7 @@ const NewsletterMode = ({ users }) => {
   return (
     <div data-testid="newsletter-mode">
       <div className="mb-4">
-        <button data-testid="new-newsletter" onClick={() => setCompose({ subject: "", heading: "", intro: "", body: "" })} className="inline-flex items-center gap-2 px-5 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors">
+        <button data-testid="new-newsletter" onClick={() => setCompose({ subject: "", heading: "", intro: "", body: "", attachment_ids: [] })} className="inline-flex items-center gap-2 px-5 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors">
           <Plus size={18} /> New newsletter
         </button>
       </div>
@@ -170,6 +267,20 @@ const NewsletterMode = ({ users }) => {
               <input data-testid="nl-heading" className={inp} placeholder="Headline (shown at the top)" value={compose.heading} onChange={(e) => setCompose({ ...compose, heading: e.target.value })} />
               <textarea data-testid="nl-intro" className={inp} rows={2} placeholder="Short intro (optional)" value={compose.intro} onChange={(e) => setCompose({ ...compose, intro: e.target.value })} />
               <textarea data-testid="nl-body" className={inp} rows={8} placeholder="Newsletter content... (blank lines start a new paragraph)" value={compose.body} onChange={(e) => setCompose({ ...compose, body: e.target.value })} />
+              <AttachmentPicker
+                attachments={(compose.attachment_ids || []).map((id) => ({ id, filename: attachmentNames[id] || id }))}
+                setAttachments={(next) => {
+                  const current = (compose.attachment_ids || []).map((id) => ({ id, filename: attachmentNames[id] || id }));
+                  const list = typeof next === "function"
+                    ? next(current)
+                    : next;
+                  const map = { ...attachmentNames };
+                  list.forEach((a) => { map[a.id] = a.filename; });
+                  setAttachmentNames(map);
+                  setCompose({ ...compose, attachment_ids: list.map((a) => a.id) });
+                }}
+                testId="newsletter-attachment"
+              />
             </div>
           )}
           <DialogFooter className="gap-2">

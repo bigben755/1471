@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
 import { UserFormDialog } from "./UserFormDialog";
 import { Plus, Loader2, KeyRound, Trash2, Pencil, Check, X } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 
 const ROLE_BADGE = {
   admin: "bg-raf-red text-white", cfav: "bg-raf-red/80 text-white",
@@ -11,17 +12,39 @@ const ROLE_BADGE = {
 };
 
 export const ManageUsersPanel = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [bonusEdit, setBonusEdit] = useState({});
+  const [appointments, setAppointments] = useState({
+    training_officer: "",
+    adjutant: "",
+    stores_officer: "",
+    community_officer: "",
+    health_safety_officer: "",
+  });
 
   const load = useCallback(async () => {
-    try { const { data } = await api.get("/users"); setUsers(data); }
+    try {
+      const { data } = await api.get("/users");
+      setUsers(data);
+      if (isAdmin) {
+        const { data: a } = await api.get("/appointments");
+        setAppointments({
+          training_officer: a.training_officer?.id || "",
+          adjutant: a.adjutant?.id || "",
+          stores_officer: a.stores_officer?.id || "",
+          community_officer: a.community_officer?.id || "",
+          health_safety_officer: a.health_safety_officer?.id || "",
+        });
+      }
+    }
     finally { setLoading(false); }
-  }, []);
+  }, [isAdmin]);
   useEffect(() => { load(); }, [load]);
 
   const resetPw = async (u) => {
@@ -48,7 +71,24 @@ export const ManageUsersPanel = () => {
     } catch { toast.error("Could not update points."); }
   };
 
-  const shown = users.filter((u) => filter === "all" || u.role === filter);
+  const shown = users.filter((u) => {
+    if (filter === "all") return true;
+    if (filter === "cfav_uniformed") return u.role === "cfav" && !!u.is_uniformed;
+    if (filter === "cfav_non_uniformed") return u.role === "cfav" && !u.is_uniformed;
+    return u.role === filter;
+  });
+
+  const staffOptions = users.filter((u) => u.role === "admin" || u.role === "cfav");
+
+  const saveAppointments = async () => {
+    try {
+      await api.put("/appointments", appointments);
+      toast.success("Officer appointments updated.");
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not update appointments.");
+    }
+  };
 
   return (
     <div>
@@ -63,12 +103,38 @@ export const ManageUsersPanel = () => {
       />
 
       <div className="flex gap-2 mb-5 flex-wrap">
-        {["all", "cadet", "parent", "cfav", "admin"].map((r) => (
+        {["all", "cadet", "parent", "cfav", "cfav_uniformed", "cfav_non_uniformed", "admin"].map((r) => (
           <button key={r} data-testid={`user-filter-${r}`} onClick={() => setFilter(r)} className={`px-4 py-2 text-sm capitalize transition-colors ${filter === r ? "bg-raf-blue text-white" : "bg-white text-raf-slate hover:text-raf-blue"}`}>
-            {r === "all" ? "All" : ROLE_LABELS[r]}
+            {r === "all" ? "All" : r === "cfav_uniformed" ? "CFAV (uniformed)" : r === "cfav_non_uniformed" ? "CFAV (non-uniformed)" : ROLE_LABELS[r]}
           </button>
         ))}
       </div>
+
+      {isAdmin && (
+        <div className="bg-white border border-white p-4 mb-5" data-testid="appointments-panel">
+          <h3 className="font-display font-bold text-raf-navy mb-3">Officer appointments</h3>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {[
+              ["training_officer", "Training Officer"],
+              ["adjutant", "Adjutant"],
+              ["stores_officer", "Stores Officer"],
+              ["community_officer", "Community Officer"],
+              ["health_safety_officer", "Health & Safety Officer"],
+            ].map(([k, label]) => (
+              <div key={k}>
+                <label className="text-xs text-raf-slate">{label}</label>
+                <select className="w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm" value={appointments[k]} onChange={(e) => setAppointments((a) => ({ ...a, [k]: e.target.value }))}>
+                  <option value="">Unassigned</option>
+                  {staffOptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.first_name} {s.last_name} {s.role === "cfav" ? (s.is_uniformed ? "(CFAV U)" : "(CFAV NU)") : "(Admin)"}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <button onClick={saveAppointments} className="mt-3 px-4 py-2.5 bg-raf-blue text-white hover:bg-raf-navy transition-colors">Save appointments</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>
@@ -79,10 +145,17 @@ export const ManageUsersPanel = () => {
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-display font-bold text-raf-navy">{u.first_name} {u.last_name}</span>
-                  <span className={`text-[10px] uppercase px-2 py-0.5 ${ROLE_BADGE[u.role]}`}>{ROLE_LABELS[u.role]}</span>
+                  <span className={`text-[10px] uppercase px-2 py-0.5 ${ROLE_BADGE[u.role]}`}>{u.role === "cfav" ? (u.is_uniformed ? "CFAV (uniformed)" : "CFAV (non-uniformed)") : ROLE_LABELS[u.role]}</span>
                   {u.role === "parent" && <span className="text-xs text-raf-slate">{(u.child_ids || []).length} linked cadet(s)</span>}
                 </div>
                 <div className="text-xs text-raf-slate mt-1">{u.email}</div>
+                {u.role === "cadet" && (
+                  <div className="text-xs text-raf-slate mt-1">
+                    DofE: <strong className="text-raf-navy">{u.dofe_level || "-"} {u.dofe_status ? `(${u.dofe_status})` : ""}</strong>
+                    {" · "}
+                    BTech: <strong className="text-raf-navy">{u.btech_pathway || "-"} {u.btech_status ? `(${u.btech_status})` : ""}</strong>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">

@@ -5,8 +5,8 @@ export default function CadetsPage() {
   return (
     <div data-testid="cadets-page">
       <Seo
-        title="For Cadets | 1471 Horwich Squadron RAF Air Cadets"
-        description="Thinking about joining as a cadet in Horwich? No experience needed. Discover your first month, activity pathways, aviation opportunities, leadership development and how to start your journey with 1471 Squadron."
+        title="Join as a Cadet | 1471 Horwich Squadron RAF Air Cadets"
+        description="Thinking about joining near Horwich, Westhoughton, Adlington, Blackrod or Lostock? See your first month and how cadets progress through activities and skills."
       />
       <Cadets />
     </div>

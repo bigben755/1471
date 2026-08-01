@@ -1,22 +1,58 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, Navigate } from "react-router-dom";
-import { ACTIVITIES, getActivity } from "../../data/content";
+import { ACTIVITIES, getActivity, ACTIVITY_FOCUS } from "../../data/content";
+import { api } from "../../api";
 import { Seo } from "../../components/site/Seo";
 import { Reveal } from "../../components/site/Reveal";
 import { Roundel } from "../../components/site/Motifs";
-import { Check, ArrowRight, ArrowLeft, Info, X, Star, Sparkles } from "lucide-react";
+import { Check, ArrowRight, ArrowLeft, Info, X, Star, Sparkles, Loader2, Plane, Wind, Mountain, Award, HeartPulse, Compass, Tent, Trophy, TentTree, Shield, BookOpen, HeartHandshake, GraduationCap, Users, Target, Rocket, Globe2, Briefcase, Wrench, Flag } from "lucide-react";
+
+const CUSTOM_ICON_MAP = {
+  Plane, Wind, Mountain, Award, HeartPulse, Compass, Tent, Trophy, TentTree,
+  Shield, BookOpen, HeartHandshake, GraduationCap, Users, Target, Rocket,
+  Globe2, Sparkles, Star, Briefcase, Wrench, Flag,
+};
+const getCustomIcon = (name) => CUSTOM_ICON_MAP[name] || Compass;
 
 export default function ActivityDetailPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const activity = getActivity(slug);
+  const staticActivity = getActivity(slug);
+  const [customActivity, setCustomActivity] = useState(null);
+  const [customLoading, setCustomLoading] = useState(!staticActivity);
   const [lightbox, setLightbox] = useState(null);
 
+  useEffect(() => {
+    if (!staticActivity) {
+      api.get(`/activities/custom/${slug}`)
+        .then(({ data }) => setCustomActivity({
+          ...data,
+          whatToExpect: data.what_to_expect || [],
+          quickFacts: data.quick_facts || [],
+        }))
+        .catch(() => setCustomActivity(null))
+        .finally(() => setCustomLoading(false));
+    }
+  }, [slug, staticActivity]);
+
+  if (!staticActivity && customLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh] gap-3 text-raf-slate">
+        <Loader2 className="animate-spin" /> Loading activity…
+      </div>
+    );
+  }
+
+  const activity = staticActivity || customActivity;
   if (!activity) return <Navigate to="/activities" replace />;
 
   const related = ACTIVITIES.filter((a) => a.slug !== slug).slice(0, 3);
-  const Icon = activity.icon;
+  const isCustom = !staticActivity;
+  const Icon = isCustom ? getCustomIcon(activity.icon_name) : activity.icon;
   const gallery = activity.gallery || [];
+  const bannerFocus = ACTIVITY_FOCUS[activity.slug] || "object-center";
+  const bannerImage = isCustom ? activity.image_url : activity.image;
+  const bannerVideo = isCustom ? null : activity.video;
 
   return (
     <div data-testid="activity-detail-page">
@@ -27,9 +63,14 @@ export default function ActivityDetailPage() {
 
       {/* Header band */}
       <section className="relative bg-raf-navy text-white overflow-hidden">
-        {activity.image && (
+        {(bannerVideo || bannerImage) && (
           <div className="absolute inset-0">
-            <img src={activity.image} alt={activity.title} className="w-full h-full object-cover" />
+            {bannerVideo ? (
+              <video src={bannerVideo} autoPlay muted loop playsInline aria-hidden="true"
+                className="w-full h-full object-cover" />
+            ) : (
+              <img src={bannerImage} alt={activity.title} className={`w-full h-full object-cover ${bannerFocus}`} />
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-raf-navy via-raf-navy/88 to-raf-navy/58" />
           </div>
         )}
@@ -45,8 +86,16 @@ export default function ActivityDetailPage() {
           >
             <ArrowLeft size={16} /> All activities
           </button>
-          <div className="inline-flex mb-5 px-3 py-1 text-[11px] uppercase tracking-[0.16em] bg-white/15 border border-white/20">
-            Activity profile
+          <div className="flex items-center gap-3 mb-5">
+            <div className="inline-flex px-3 py-1 text-[11px] uppercase tracking-[0.16em] bg-white/15 border border-white/20">
+              Activity profile
+            </div>
+            {activity.video && (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] uppercase tracking-[0.14em] bg-raf-red text-white">
+                <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3 shrink-0"><polygon points="5,3 19,12 5,21" /></svg>
+                Live footage
+              </div>
+            )}
           </div>
           {activity.strapline && (
             <p className="mb-5 max-w-2xl text-white/85 text-base md:text-lg leading-relaxed">{activity.strapline}</p>
@@ -159,12 +208,30 @@ export default function ActivityDetailPage() {
                   onClick={() => setLightbox(g)}
                   className={`group relative overflow-hidden bg-raf-navy/10 ${i === 0 ? "col-span-2 row-span-2 aspect-square md:aspect-auto" : "aspect-square"}`}
                 >
-                  <img
-                    src={g.src}
-                    alt={g.caption}
-                    loading="lazy"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
+                  {g.type === "video" ? (
+                    <>
+                      <video
+                        src={g.src}
+                        muted
+                        autoPlay
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-raf-navy/70 flex items-center justify-center">
+                          <svg viewBox="0 0 24 24" fill="white" className="w-5 h-5 ml-0.5"><polygon points="5,3 19,12 5,21" /></svg>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <img
+                      src={g.src}
+                      alt={g.caption}
+                      loading="lazy"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-raf-navy/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
                     <span className="text-white text-xs font-medium leading-snug">{g.caption}</span>
                   </div>
@@ -190,7 +257,17 @@ export default function ActivityDetailPage() {
             <X size={22} />
           </button>
           <figure className="max-w-5xl max-h-full" onClick={(e) => e.stopPropagation()}>
-            <img src={lightbox.src} alt={lightbox.caption} className="max-h-[80vh] w-auto mx-auto object-contain" />
+            {lightbox.type === "video" ? (
+              <video
+                src={lightbox.src}
+                controls
+                autoPlay
+                playsInline
+                className="max-h-[80vh] w-auto mx-auto"
+              />
+            ) : (
+              <img src={lightbox.src} alt={lightbox.caption} className="max-h-[80vh] w-auto mx-auto object-contain" />
+            )}
             <figcaption className="mt-4 text-center text-white/80 text-sm">{lightbox.caption}</figcaption>
           </figure>
         </div>

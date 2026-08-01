@@ -12,6 +12,9 @@ const ROLE_BADGE = {
 
 export const PortalShell = ({ tabs, active, onTab, children }) => {
   const { user, logout } = useAuth();
+  const roleText = user?.role === "cfav"
+    ? (user?.is_uniformed ? "CFAV (uniformed)" : "CFAV (non-uniformed)")
+    : ROLE_LABELS[user?.role];
   return (
     <div className="min-h-screen bg-raf-sky">
       <header className="bg-raf-navy text-white sticky top-0 z-40">
@@ -26,7 +29,7 @@ export const PortalShell = ({ tabs, active, onTab, children }) => {
             </div>
             <div className="flex items-center gap-3">
               <span className={`hidden sm:inline-block text-[10px] uppercase tracking-wide px-2.5 py-1 ${ROLE_BADGE[user?.role]}`}>
-                {ROLE_LABELS[user?.role]}
+                {roleText}
               </span>
               <a href="/" className="hidden md:flex items-center gap-1 text-xs text-raf-sky hover:text-white">
                 <ExternalLink size={14} /> Website

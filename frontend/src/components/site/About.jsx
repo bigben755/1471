@@ -48,14 +48,31 @@ export const About = () => (
           </p>
         </Reveal>
         <Reveal delay={0.15}>
-          <div className="relative">
-            <div className="absolute -inset-2 border border-raf-sky -z-10" />
+          <div className="relative sm:pt-6 sm:pr-6">
+            {/* Main large photo */}
             <img
               src={ABOUT_IMG}
               alt="Cadets of 1471 Horwich Squadron on parade"
-              className="w-full aspect-[4/3] object-cover"
+              className="w-full aspect-[4/3] object-cover object-top relative z-10"
             />
-            <div className="absolute bottom-0 left-0 h-1.5 w-24 bg-raf-red" />
+            {/* Floating photo – bottom-right overlay (desktop only) */}
+            <div className="hidden sm:block absolute -bottom-6 -right-0 z-20 w-2/5 border-4 border-white shadow-xl">
+              <img
+                src="/squadron/raf_station_visits/raf-station-visit-1-cadet-in-a-typhoon-raf-coningsby.jpg"
+                alt="Cadet in a Typhoon at RAF Coningsby"
+                className="w-full aspect-[4/3] object-cover object-center"
+              />
+            </div>
+            {/* Floating photo – top-right accent (desktop only) */}
+            <div className="hidden sm:block absolute -top-6 -right-6 z-0 w-1/3 border-4 border-raf-sky shadow-lg">
+              <img
+                src="/squadron/overseas/overseas-1-group-photo.jpg"
+                alt="Overseas camp group photo"
+                className="w-full aspect-square object-cover object-top"
+              />
+            </div>
+            {/* Red accent bar */}
+            <div className="absolute bottom-0 left-0 z-20 h-[4px] w-24 bg-raf-red" />
           </div>
         </Reveal>
       </div>
