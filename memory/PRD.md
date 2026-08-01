@@ -97,6 +97,10 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - **In-app banner** (`PwaManager`, top of portal dashboard): "Install app" (Android/desktop when beforeinstallprompt fires) + "Turn on notifications" + iOS Add-to-Home-Screen guidance; dismissible. `enablePush()` wrapped in try/catch (fixed iteration_7 medium bug).
 - Caveat: iPhone/iPad need Add-to-Home-Screen (iOS 16.4+) before push works. Real push delivery can't be validated in headless automation (Chromium treats Push as incognito) — wiring verified at API layer.
 
+## Mobile responsiveness pass — 2026-06-21
+- **Fixed site-wide horizontal overflow** (every public page scrolled sideways on mobile). Root cause: the closed off-canvas mobile nav drawer (`fixed ... translate-x-full`) plus its decorative Roundel/route-line SVGs sat off-screen to the right, inflating `scrollWidth` to ~844px on a 390px viewport. Fix: `overflow-x: clip` + `max-width:100vw` on `html, body` in index.css. Used `clip` (not `hidden`) so it doesn't create a scroll container and the sticky headers keep working. Verified: scrollWidth == innerWidth on home/about/join/cadets/volunteer/faq/activity-detail/portal; sticky header stays at top:0 after scroll.
+- **Portal month calendar mobile view** (`Calendar.jsx`): event titles truncated to nothing in ~48px-wide cells on phones. Now shows compact tappable colour dots (`sm:hidden`) on mobile and the full title chips on `sm+`; cell min-height reduced on mobile (`min-h-[64px] sm:min-h-[92px]`). Readable event details remain in the "Upcoming" list below. `data-testid="cal-event-{id}"` moved to the mobile dot.
+
 ## Backlog / tech debt (open, prioritised)
 
 ## Email — switched to Resend — 2026-06-21

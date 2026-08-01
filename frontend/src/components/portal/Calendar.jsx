@@ -52,17 +52,30 @@ export const Calendar = ({ events, onSelect }) => {
 
       <div className="grid grid-cols-7">
         {cells.map((day, i) => (
-          <div key={i} className={`min-h-[92px] border-b border-r border-raf-sky/70 p-1.5 ${day ? "" : "bg-raf-sky/30"}`}>
+          <div key={i} className={`min-h-[64px] sm:min-h-[92px] border-b border-r border-raf-sky/70 p-1 sm:p-1.5 ${day ? "" : "bg-raf-sky/30"}`}>
             {day && (
               <>
                 <div className={`text-xs mb-1 ${sameDay(day, today) ? "font-bold text-raf-red" : "text-raf-slate"}`}>
                   {day.getDate()}
                 </div>
-                <div className="space-y-1">
+                {/* Mobile: compact colour dots */}
+                <div className="flex flex-wrap gap-1 sm:hidden">
                   {eventsOn(day).map((e) => (
                     <button
                       key={e.id}
                       data-testid={`cal-event-${e.id}`}
+                      onClick={() => onSelect(e)}
+                      aria-label={e.title}
+                      title={e.title}
+                      className={`w-2.5 h-2.5 rounded-full ${COLOUR[e.colour]}`}
+                    />
+                  ))}
+                </div>
+                {/* sm+: full title chips */}
+                <div className="hidden sm:block space-y-1">
+                  {eventsOn(day).map((e) => (
+                    <button
+                      key={e.id}
                       onClick={() => onSelect(e)}
                       className={`w-full text-left px-1.5 py-1 text-[11px] leading-tight font-medium truncate ${COLOUR[e.colour]} hover:opacity-90`}
                       title={e.title}
