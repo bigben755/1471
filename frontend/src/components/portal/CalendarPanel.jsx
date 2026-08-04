@@ -82,13 +82,21 @@ function ImportWordDialog({ open, onClose, onImported }) {
 }
 
 const blank = {
-  title: "", description: "", location: "", start: "", end: "",
+  title: "", description: "", location: "", link_url: "https://cadets.bader.mod.uk/", attachment_ids: [], start: "", end: "",
   capacity: 12, event_type: "standard", participation: "attend", points_value: 10,
 };
 
 function EventForm({ open, onClose, onSaved, editing }) {
   const [form, setForm] = useState(blank);
   const [busy, setBusy] = useState(false);
+  const [attachments, setAttachments] = useState([]);
+
+  useEffect(() => {
+    if (!open) return;
+    api.get("/attachments")
+      .then(({ data }) => setAttachments(Array.isArray(data) ? data : []))
+      .catch(() => setAttachments([]));
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -96,6 +104,7 @@ function EventForm({ open, onClose, onSaved, editing }) {
         ...blank, ...editing,
         start: editing.start ? editing.start.slice(0, 16) : "",
         end: editing.end ? editing.end.slice(0, 16) : "",
+        attachment_ids: editing.attachment_ids || [],
       } : blank);
     }
   }, [open, editing]);
@@ -108,6 +117,7 @@ function EventForm({ open, onClose, onSaved, editing }) {
     const payload = {
       ...form,
       capacity: Number(form.capacity), points_value: Number(form.points_value),
+      attachment_ids: form.attachment_ids || [],
       start: new Date(form.start).toISOString(),
       end: form.end ? new Date(form.end).toISOString() : null,
     };
@@ -145,6 +155,31 @@ function EventForm({ open, onClose, onSaved, editing }) {
           <input data-testid="event-title" className={inp} placeholder="Event title" value={form.title} onChange={(e) => f("title", e.target.value)} />
           <textarea className={inp} rows={3} placeholder="Description" value={form.description} onChange={(e) => f("description", e.target.value)} />
           <input className={inp} placeholder="Location" value={form.location} onChange={(e) => f("location", e.target.value)} />
+          <input className={inp} placeholder="Event link" value={form.link_url} onChange={(e) => f("link_url", e.target.value)} />
+          <div>
+            <div className="text-xs text-raf-slate mb-2">Event docs / files</div>
+            <div className="max-h-40 overflow-y-auto border border-raf-sky p-2 space-y-1 bg-white">
+              {attachments.length === 0 ? (
+                <div className="text-xs text-raf-slate">No uploaded attachments available.</div>
+              ) : attachments.map((a) => {
+                const selected = (form.attachment_ids || []).includes(a.id);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => f("attachment_ids", selected
+                      ? (form.attachment_ids || []).filter((id) => id !== a.id)
+                      : [...(form.attachment_ids || []), a.id])}
+                    className={`w-full flex items-center gap-2 text-left px-2 py-1.5 border transition-colors ${selected ? "bg-raf-blue text-white border-raf-blue" : "bg-white text-raf-navy border-raf-sky hover:border-raf-blue"}`}
+                  >
+                    <FileText size={13} />
+                    <span className="text-xs truncate">{a.filename}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-raf-slate">Select any uploaded docs you want cadets and parents to see on the event.</p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-raf-slate">Start</label>
@@ -230,7 +265,11 @@ export const CalendarPanel = ({ canManage }) => {
     <div>
       <PanelHeading
         title="Events calendar"
-        intro={canManage ? "Create events, manage bids and mark attendance." : "Tap an event to see details" + (user?.role === "cadet" ? " and bid for a place." : ".")}
+        intro={canManage
+          ? "Create events, manage bids and mark attendance."
+          : (user?.role === "cadet"
+            ? "Tap an event to view details, then open Cadet Portal from the event."
+            : "Tap an event to see details.")}
         action={
           <div className="flex flex-wrap gap-2">
             <div className="inline-flex border border-raf-sky rounded-none overflow-hidden" data-testid="calendar-view-toggle">

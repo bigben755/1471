@@ -13,6 +13,7 @@ import FaqPage from "@/pages/site/FaqPage";
 import JoinPage from "@/pages/site/JoinPage";
 import NewsPage from "@/pages/site/NewsPage";
 import NewsDetailPage from "@/pages/site/NewsDetailPage";
+import RegisterPage from "@/pages/site/RegisterPage";
 import Portal from "@/pages/Portal";
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/news" element={<NewsPage />} />
             <Route path="/news/:slug" element={<NewsDetailPage />} />
             <Route path="/join" element={<JoinPage />} />
+            <Route path="/register" element={<RegisterPage />} />
           </Route>
           <Route path="/portal" element={<Portal />} />
           <Route path="/admin" element={<Navigate to="/portal" replace />} />

@@ -106,6 +106,7 @@ requests==2.34.2
 requests-oauthlib==2.0.0
 resend==2.32.2
 rich==15.0.0
+qrcode==8.2
 rpds-py==2026.5.1
 rsa==4.9.1
 s3transfer==0.19.0

@@ -71,8 +71,9 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
   const toggleChild = (id) => setForm((s) => ({ ...s, child_ids: s.child_ids.includes(id) ? s.child_ids.filter((x) => x !== id) : [...s.child_ids, id] }));
 
   const save = async () => {
-    if (!form.email || !form.first_name) { toast.error("Email and first name are required."); return; }
-    if (!editing && form.password.length < 6) { toast.error("Set a password of at least 6 characters."); return; }
+    if (!form.first_name) { toast.error("First name is required."); return; }
+    if (form.role !== "cadet" && !form.email) { toast.error("Email is required for this role."); return; }
+    if (!editing && form.role !== "cadet" && form.password.length < 6) { toast.error("Set a password of at least 6 characters."); return; }
     setBusy(true);
     try {
       if (editing) {
@@ -90,8 +91,9 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
         });
         toast.success("Member updated.");
       } else {
-        await api.post("/users", {
+        const { data: created } = await api.post("/users", {
           ...form,
+          email: form.email?.trim() || null,
           is_uniformed: form.role === "cfav" ? !!form.is_uniformed : null,
           child_ids: form.role === "parent" ? form.child_ids : [],
           dofe_level: form.role === "cadet" ? form.dofe_level || null : null,
@@ -99,8 +101,13 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
           btech_pathway: form.role === "cadet" ? form.btech_pathway || null : null,
           btech_status: form.role === "cadet" ? form.btech_status || null : null,
           major_badges: form.role === "cadet" ? form.badges.split(",").map((x) => x.trim()).filter(Boolean) : [],
+          password: form.role === "cadet" ? "" : form.password,
         });
-        toast.success("Member account created.");
+        if (form.role === "cadet") {
+          toast.success(`Cadet account created. Username: ${created.login_username}. Default password: Squadron123!`);
+        } else {
+          toast.success("Member account created.");
+        }
       }
       onSaved();
       onClose();
@@ -116,7 +123,7 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
       <DialogContent data-testid="user-form" className="max-w-md max-h-[90vh] overflow-y-auto rounded-none">
         <DialogHeader><DialogTitle className="font-display text-raf-navy">{editing ? "Edit member" : "New member account"}</DialogTitle><DialogDescription className="sr-only">Member account form</DialogDescription></DialogHeader>
         <div className="space-y-3">
-          <input data-testid="user-email" className={inp} placeholder="Email" type="email" value={form.email} disabled={!!editing} onChange={(e) => f("email", e.target.value)} />
+          <input data-testid="user-email" className={inp} placeholder={form.role === "cadet" ? "Email (optional for cadets)" : "Email"} type="email" value={form.email} disabled={!!editing} onChange={(e) => f("email", e.target.value)} />
           <div className="grid grid-cols-2 gap-3">
             <input data-testid="user-firstname" className={inp} placeholder="First name" value={form.first_name} onChange={(e) => f("first_name", e.target.value)} />
             <input className={inp} placeholder="Last name" value={form.last_name} onChange={(e) => f("last_name", e.target.value)} />
@@ -133,8 +140,13 @@ export function UserFormDialog({ open, onClose, onSaved, editing, prefill }) {
               Uniformed CFAV
             </label>
           )}
-          {!editing && (
+          {!editing && form.role !== "cadet" && (
             <input data-testid="user-password" className={inp} placeholder="Temporary password" value={form.password} onChange={(e) => f("password", e.target.value)} />
+          )}
+          {!editing && form.role === "cadet" && (
+            <div className="border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              Username will be auto-generated as surname + first initial. Default first-login password is Squadron123! and should be changed after sign-in.
+            </div>
           )}
           {form.role === "parent" && (
             <div>

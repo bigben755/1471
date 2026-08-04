@@ -58,6 +58,20 @@ export default function NewsDetailPage() {
             </div>
           )}
 
+          {post.facebook_post_url && (
+            <div className="mt-8">
+              <a
+                data-testid="news-facebook-post-link"
+                href={post.facebook_post_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1877F2] text-white font-semibold hover:bg-[#0f66d0] transition-colors"
+              >
+                <Facebook size={18} /> View linked Facebook post
+              </a>
+            </div>
+          )}
+
           <div className="mt-10 pt-8 border-t border-raf-sky flex items-center gap-3">
             <span className="text-sm text-raf-slate">Share this story:</span>
             <button data-testid="share-facebook" onClick={shareFb} className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#1877F2] text-white font-semibold hover:bg-[#0f66d0] transition-colors">

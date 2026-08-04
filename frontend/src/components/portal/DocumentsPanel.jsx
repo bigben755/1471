@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "../ui/dialog";
 import {
-  Loader2, Upload, FileText, Send, Trash2, Download, Eye, Monitor, Mail, Plus, FolderOpen,
+  Loader2, Upload, FileText, Send, Trash2, Download, Monitor, Mail, Plus, FolderOpen, BookOpenCheck,
 } from "lucide-react";
 
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
@@ -21,7 +21,9 @@ const fmtSize = (b) => b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, M
 
 export const DocumentsPanel = () => {
   const [docs, setDocs] = useState([]);
+  const [learningAssignments, setLearningAssignments] = useState([]);
   const [users, setUsers] = useState([]);
+  const [appointmentOptions, setAppointmentOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upOpen, setUpOpen] = useState(false);
   const [form, setForm] = useState({ title: "", category: "General", visible_roles: [] });
@@ -31,13 +33,59 @@ export const DocumentsPanel = () => {
   const [audience, setAudience] = useState(emptyAudience());
   const [channels, setChannels] = useState(["dashboard", "email"]);
   const [message, setMessage] = useState("");
+  const [openSendAfterUpload, setOpenSendAfterUpload] = useState(true);
+  const [assignmentFor, setAssignmentFor] = useState(null);
+  const [assignmentCadetIds, setAssignmentCadetIds] = useState([]);
+  const [assignmentInstructions, setAssignmentInstructions] = useState("");
+  const [assignmentDueDate, setAssignmentDueDate] = useState("");
+  const [assignmentSearch, setAssignmentSearch] = useState("");
   const fileRef = useRef(null);
+  const cadets = users.filter((u) => u.role === "cadet");
+  const filteredCadets = cadets.filter((u) =>
+    `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(assignmentSearch.toLowerCase()));
 
   const load = useCallback(async () => {
-    try { const { data } = await api.get("/documents"); setDocs(data); }
+    try {
+      const [{ data: documentRows }, { data: assignmentRows }] = await Promise.all([
+        api.get("/documents"),
+        api.get("/learning-assignments/staff"),
+      ]);
+      setDocs(documentRows);
+      setLearningAssignments(Array.isArray(assignmentRows) ? assignmentRows : []);
+    }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); api.get("/users").then(({ data }) => setUsers(data)).catch(() => {}); }, [load]);
+  useEffect(() => {
+    load();
+    api.get("/users").then(({ data }) => setUsers(data)).catch(() => {});
+    api.get("/appointments").then(({ data }) => {
+      const labels = {
+        training_officer: "Training Officer",
+        adjutant: "Adjutant",
+        stores_officer: "Stores Officer",
+        community_officer: "Community Officer",
+        health_safety_officer: "Health & Safety Officer",
+        shooting_officer: "Shooting Officer",
+        stem_officer: "STEM Officer",
+        oc: "OC",
+        deputy_oc: "Deputy OC",
+        leadership_officer: "Leadership Officer",
+        sports_officer: "Sports Officer",
+        sqn_wo: "Sqn WO",
+        dofe_officer: "DofE Officer",
+        adventure_training_officer: "Adventure Training Officer",
+        fieldcraft_officer: "Fieldcraft Officer",
+        cyber_officer: "Cyber Officer",
+        space_officer: "Space Officer",
+      };
+      const opts = Object.keys(labels).map((k) => {
+        const u = data?.[k];
+        const holder = u ? `${u.first_name || ""} ${u.last_name || ""}`.trim() : "Unassigned";
+        return { key: k, label: `${labels[k]} (${holder || "Unassigned"})` };
+      });
+      setAppointmentOptions(opts);
+    }).catch(() => setAppointmentOptions([]));
+  }, [load]);
 
   const toggleRole = (r) => setForm((f) => ({ ...f, visible_roles: f.visible_roles.includes(r) ? f.visible_roles.filter((x) => x !== r) : [...f.visible_roles, r] }));
 
@@ -50,9 +98,15 @@ export const DocumentsPanel = () => {
       fd.append("title", form.title);
       fd.append("category", form.category || "General");
       fd.append("visible_roles", form.visible_roles.join(","));
-      await api.post("/documents", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      const { data: created } = await api.post("/documents", fd, { headers: { "Content-Type": "multipart/form-data" } });
       toast.success("Document added to the library.");
       setUpOpen(false); setForm({ title: "", category: "General", visible_roles: [] }); setFile(null);
+      if (openSendAfterUpload && created?.id) {
+        setSendFor(created);
+        setAudience({ ...emptyAudience(), mode: "appointments" });
+        setChannels(["dashboard", "email"]);
+        setMessage("Please review and action as relevant for your appointment.");
+      }
       load();
     } catch (err) { toast.error(err.response?.data?.detail || "Upload failed."); }
     finally { setBusy(false); }
@@ -61,6 +115,35 @@ export const DocumentsPanel = () => {
   const remove = async (id) => {
     if (!window.confirm("Delete this document from the library?")) return;
     await api.delete(`/documents/${id}`); setDocs((d) => d.filter((x) => x.id !== id)); toast.success("Deleted.");
+  };
+
+  const toggleCadet = (id) => {
+    setAssignmentCadetIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const assignLearning = async () => {
+    if (!assignmentFor) return;
+    if (assignmentCadetIds.length === 0) { toast.error("Choose at least one cadet."); return; }
+    setBusy(true);
+    try {
+      await api.post("/learning-assignments", {
+        document_id: assignmentFor.id,
+        cadet_ids: assignmentCadetIds,
+        instructions: assignmentInstructions,
+        due_date: assignmentDueDate,
+      });
+      toast.success("Workbook assigned.");
+      setAssignmentFor(null);
+      setAssignmentCadetIds([]);
+      setAssignmentInstructions("");
+      setAssignmentDueDate("");
+      setAssignmentSearch("");
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not assign workbook.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doSend = async () => {
@@ -85,6 +168,47 @@ export const DocumentsPanel = () => {
         <Plus size={18} /> Add document
       </button>
 
+      {learningAssignments.length > 0 && (
+        <div className="bg-white border border-white p-4 mb-6" data-testid="learning-assignments-panel">
+          <h3 className="font-display font-bold text-raf-navy mb-3">Assigned learning</h3>
+          <div className="space-y-3">
+            {learningAssignments.slice(0, 10).map((assignment) => (
+              <div key={assignment.id} className="border border-raf-sky p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-raf-navy">{assignment.document?.title || "Workbook"}</div>
+                    <div className="text-xs text-raf-slate">
+                      {assignment.submitted_count || 0} of {(assignment.cadets || []).length} submitted
+                      {assignment.due_date ? ` · due ${assignment.due_date}` : ""}
+                    </div>
+                  </div>
+                  <a href={`${BASE_URL}/api/documents/${assignment.document_id}/download`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-raf-blue text-raf-blue hover:bg-raf-blue hover:text-white transition-colors">
+                    <Download size={13} /> Workbook
+                  </a>
+                </div>
+                {assignment.instructions && <p className="text-sm text-raf-slate mt-2">{assignment.instructions}</p>}
+                {Array.isArray(assignment.submissions) && assignment.submissions.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {assignment.submissions.map((submission) => (
+                      <a
+                        key={submission.id}
+                        href={`${BASE_URL}/api/learning-submissions/${submission.id}/download`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center justify-between gap-3 bg-raf-sky/30 px-3 py-2 text-sm text-raf-navy hover:bg-raf-sky/50 transition-colors"
+                      >
+                        <span>{submission.cadet_name || "Cadet"} · {submission.filename}</span>
+                        <Download size={14} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>
       ) : docs.length === 0 ? (
@@ -104,6 +228,7 @@ export const DocumentsPanel = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <a data-testid={`document-download-${d.id}`} href={`${BASE_URL}/api/documents/${d.id}/download`} target="_blank" rel="noreferrer" className="p-2 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors" title="Download"><Download size={15} /></a>
+                      <button data-testid={`document-assign-${d.id}`} onClick={() => { setAssignmentFor(d); setAssignmentCadetIds([]); setAssignmentInstructions(""); setAssignmentDueDate(""); setAssignmentSearch(""); }} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"><BookOpenCheck size={13} /> Assign learning</button>
                       <button data-testid={`document-send-${d.id}`} onClick={() => { setSendFor(d); setChannels(["dashboard", "email"]); }} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs bg-raf-red text-white hover:bg-[#A00926] transition-colors"><Send size={13} /> Send</button>
                       <button data-testid={`document-delete-${d.id}`} onClick={() => remove(d.id)} className="p-2 bg-red-50 text-raf-red hover:bg-raf-red hover:text-white transition-colors" title="Delete"><Trash2 size={15} /></button>
                     </div>
@@ -135,10 +260,42 @@ export const DocumentsPanel = () => {
             <button type="button" onClick={() => fileRef.current?.click()} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 border border-dashed border-raf-sky text-raf-slate hover:border-raf-blue transition-colors">
               <Upload size={16} /> {file ? file.name : "Choose file (max 15MB)"}
             </button>
+            <label className="flex items-center gap-2 text-sm text-raf-slate">
+              <input type="checkbox" checked={openSendAfterUpload} onChange={(e) => setOpenSendAfterUpload(e.target.checked)} className="w-4 h-4 accent-raf-blue" />
+              Open send dialog after upload (recommended for Adjutant email drops)
+            </label>
           </div>
           <DialogFooter>
             <button data-testid="doc-upload-submit" onClick={upload} disabled={busy} className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors disabled:opacity-60">
               {busy && <Loader2 className="animate-spin" size={16} />} Add to library
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!assignmentFor} onOpenChange={(o) => !o && setAssignmentFor(null)}>
+        <DialogContent data-testid="learning-assign-dialog" className="max-w-2xl rounded-none">
+          <DialogHeader><DialogTitle className="font-display text-raf-navy">Assign learning workbook</DialogTitle><DialogDescription className="sr-only">Assign workbook to cadets</DialogDescription></DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-raf-slate">Workbook: <span className="text-raf-navy font-semibold">{assignmentFor?.title}</span></div>
+            <textarea className={inp} rows={3} placeholder="Instructions for cadets" value={assignmentInstructions} onChange={(e) => setAssignmentInstructions(e.target.value)} />
+            <input type="date" className={inp} value={assignmentDueDate} onChange={(e) => setAssignmentDueDate(e.target.value)} />
+            <input className={inp} placeholder="Search cadets" value={assignmentSearch} onChange={(e) => setAssignmentSearch(e.target.value)} />
+            <div className="max-h-64 overflow-y-auto border border-raf-sky divide-y divide-raf-sky/60">
+              {filteredCadets.map((cadet) => (
+                <label key={cadet.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer hover:bg-raf-sky/40">
+                  <input type="checkbox" checked={assignmentCadetIds.includes(cadet.id)} onChange={() => toggleCadet(cadet.id)} className="w-4 h-4 accent-raf-blue" />
+                  <span className="text-raf-navy">{cadet.first_name} {cadet.last_name}</span>
+                  <span className="ml-auto text-xs text-raf-slate">{cadet.login_username || cadet.email}</span>
+                </label>
+              ))}
+              {filteredCadets.length === 0 && <div className="px-3 py-4 text-xs text-raf-slate text-center">No cadets found.</div>}
+            </div>
+            <p className="text-xs text-raf-slate">Completed uploads will notify the Training Officer automatically for marking.</p>
+          </div>
+          <DialogFooter>
+            <button onClick={assignLearning} disabled={busy} className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors disabled:opacity-60">
+              {busy ? <Loader2 className="animate-spin" size={16} /> : <BookOpenCheck size={16} />} Assign workbook
             </button>
           </DialogFooter>
         </DialogContent>
@@ -150,7 +307,7 @@ export const DocumentsPanel = () => {
           <DialogHeader><DialogTitle className="font-display text-raf-navy">Send &ldquo;{sendFor?.title}&rdquo;</DialogTitle><DialogDescription className="sr-only">Send this document to recipients</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <textarea data-testid="doc-send-message" className={inp} rows={2} placeholder="Add a short message (optional)" value={message} onChange={(e) => setMessage(e.target.value)} />
-            <div><div className="text-xs font-semibold text-raf-navy mb-2">Recipients</div><RecipientPicker value={audience} onChange={setAudience} users={users} /></div>
+            <div><div className="text-xs font-semibold text-raf-navy mb-2">Recipients</div><RecipientPicker value={audience} onChange={setAudience} users={users} appointmentOptions={appointmentOptions} /></div>
             <div>
               <div className="text-xs font-semibold text-raf-navy mb-2">Deliver via</div>
               <div className="flex gap-2">

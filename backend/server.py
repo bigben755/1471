@@ -8,6 +8,7 @@ import os
 import re
 import io
 import json
+import html
 import base64
 import logging
 import uuid
@@ -44,6 +45,8 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = "HS256"
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'admin@example.com')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+CADET_DEFAULT_PASSWORD = os.environ.get('CADET_DEFAULT_PASSWORD', 'Squadron123!')
+DEFAULT_EVENT_LINK = os.environ.get('DEFAULT_EVENT_LINK', 'https://cadets.bader.mod.uk/')
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY', '').strip()
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 NOTIFY_EMAIL = os.environ.get('NOTIFY_EMAIL', ADMIN_EMAIL)
@@ -63,6 +66,18 @@ APPOINTMENT_MAILBOX = {
     "stores_officer": "stores",
     "community_officer": "community",
     "health_safety_officer": "healthsafety",
+    "shooting_officer": "shooting",
+    "stem_officer": "stem",
+    "oc": "oc",
+    "deputy_oc": "deputyoc",
+    "leadership_officer": "leadership",
+    "sports_officer": "sports",
+    "sqn_wo": "sqnwo",
+    "dofe_officer": "dofe",
+    "adventure_training_officer": "adventuretraining",
+    "fieldcraft_officer": "fieldcraft",
+    "cyber_officer": "cyber",
+    "space_officer": "space",
 }
 
 
@@ -97,6 +112,31 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def _clean_username_part(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def login_username_base(first_name: str, last_name: str) -> str:
+    surname = _clean_username_part(last_name)
+    first_initial = _clean_username_part(first_name)[:1]
+    base = (surname + first_initial).strip()
+    if not base:
+        base = _clean_username_part(first_name) or "cadet"
+    return base[:24]
+
+
+async def ensure_login_username(first_name: str, last_name: str, exclude_user_id: Optional[str] = None) -> str:
+    base = login_username_base(first_name, last_name)
+    candidate = base
+    suffix = 2
+    while True:
+        existing = await db.users.find_one({"login_username": candidate}, {"_id": 0, "id": 1})
+        if not existing or existing.get("id") == exclude_user_id:
+            return candidate
+        candidate = f"{base}{suffix}"
+        suffix += 1
 
 
 def create_access_token(user_id: str, email: str, role: str) -> str:
@@ -151,6 +191,18 @@ APPOINTMENT_KEYS = [
     "stores_officer",
     "community_officer",
     "health_safety_officer",
+    "shooting_officer",
+    "stem_officer",
+    "oc",
+    "deputy_oc",
+    "leadership_officer",
+    "sports_officer",
+    "sqn_wo",
+    "dofe_officer",
+    "adventure_training_officer",
+    "fieldcraft_officer",
+    "cyber_officer",
+    "space_officer",
 ]
 
 
@@ -191,6 +243,9 @@ async def compute_member_stats(user_id: str) -> dict:
 def public_user(u: dict) -> dict:
     return {
         "id": u["id"], "email": u["email"], "role": u["role"],
+        "login_username": u.get("login_username", ""),
+        "must_change_password": bool(u.get("must_change_password", False)),
+        "last_login_at": u.get("last_login_at"),
         "first_name": u.get("first_name", ""), "last_name": u.get("last_name", ""),
         "is_uniformed": bool(u.get("is_uniformed", False)) if u.get("role") == "cfav" else None,
         "child_ids": u.get("child_ids", []), "bonus_points": int(u.get("bonus_points", 0)),
@@ -208,7 +263,7 @@ def public_user(u: dict) -> dict:
 # Models
 # ---------------------------------------------------------------------------
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 
@@ -222,12 +277,12 @@ class ResetPassword(BaseModel):
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
     first_name: str = Field(..., min_length=1)
     last_name: str = Field(default="")
     role: str
     is_uniformed: Optional[bool] = None
-    password: str = Field(..., min_length=6)
+    password: str = Field(default="", min_length=0)
     child_ids: List[str] = []
     model_config = ConfigDict(extra="ignore")
 
@@ -245,6 +300,15 @@ class UserUpdate(BaseModel):
     btech_status: Optional[str] = None
     cadet_notes: Optional[str] = None
     major_badges: Optional[List[str]] = None
+
+
+class SelfRegisterRequest(BaseModel):
+    role: str
+    first_name: str = Field(..., min_length=1, max_length=120)
+    last_name: str = Field(default="", max_length=120)
+    email: Optional[EmailStr] = None
+    is_uniformed: Optional[bool] = None
+    model_config = ConfigDict(extra="ignore")
 
 
 class CfavAvailabilityCreate(BaseModel):
@@ -295,6 +359,18 @@ class AppointmentsUpdate(BaseModel):
     stores_officer: Optional[str] = None
     community_officer: Optional[str] = None
     health_safety_officer: Optional[str] = None
+    shooting_officer: Optional[str] = None
+    stem_officer: Optional[str] = None
+    oc: Optional[str] = None
+    deputy_oc: Optional[str] = None
+    leadership_officer: Optional[str] = None
+    sports_officer: Optional[str] = None
+    sqn_wo: Optional[str] = None
+    dofe_officer: Optional[str] = None
+    adventure_training_officer: Optional[str] = None
+    fieldcraft_officer: Optional[str] = None
+    cyber_officer: Optional[str] = None
+    space_officer: Optional[str] = None
     model_config = ConfigDict(extra="ignore")
 
 
@@ -332,6 +408,8 @@ class EventCreate(BaseModel):
     title: str = Field(..., min_length=2)
     description: str = ""
     location: str = ""
+    link_url: str = ""
+    attachment_ids: List[str] = []
     start: str  # ISO datetime
     end: Optional[str] = None
     capacity: int = 0  # 0 = unlimited
@@ -345,6 +423,8 @@ class EventUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     location: Optional[str] = None
+    link_url: Optional[str] = None
+    attachment_ids: Optional[List[str]] = None
     start: Optional[str] = None
     end: Optional[str] = None
     capacity: Optional[int] = None
@@ -379,6 +459,7 @@ class Audience(BaseModel):
     roles: List[str] = []
     user_ids: List[str] = []
     cadet_id: Optional[str] = None
+    appointment_keys: List[str] = []
     model_config = ConfigDict(extra="ignore")
 
 
@@ -639,6 +720,55 @@ def compute_eligibility(e: dict) -> Optional[str]:
     return "september" if ed <= ns else "future"
 
 
+def _dob_age_years(dob_value: Optional[str]) -> Optional[int]:
+    """Age in full years from ISO dob; returns None if missing/invalid."""
+    if not dob_value:
+        return None
+    try:
+        d = datetime.fromisoformat(dob_value).date()
+    except Exception:
+        try:
+            d = datetime.strptime(dob_value, "%Y-%m-%d").date()
+        except Exception:
+            return None
+    today = date.today()
+    years = today.year - d.year - ((today.month, today.day) < (d.month, d.day))
+    return years
+
+
+def age_mismatch_info(e: dict) -> dict:
+    """Detect obvious mismatch between selected age band and supplied DoB.
+
+    This flags clear contradictions only (for follow-up), not borderline school-year cases.
+    """
+    band = e.get("age_band")
+    age = _dob_age_years(e.get("dob"))
+    if not band or age is None:
+        return {"is_mismatch": False, "reason": "", "expected": ""}
+
+    expected = ""
+    mismatch = False
+    reason = ""
+
+    if age >= 13:
+        expected = "13_plus"
+        if band != "13_plus":
+            mismatch = True
+            reason = "Selected band is younger than DoB-based age."
+    elif age == 12:
+        expected = "yr8"
+        if band in ("13_plus", "under_12"):
+            mismatch = True
+            reason = "Selected band does not match DoB-based age of 12."
+    else:
+        expected = "under_12"
+        if band in ("yr8", "13_plus"):
+            mismatch = True
+            reason = "Selected band is older than DoB-based age."
+
+    return {"is_mismatch": mismatch, "reason": reason, "expected": expected}
+
+
 def countdown_text(target_iso: str) -> str:
     target = date.fromisoformat(target_iso)
     days = (target - date.today()).days
@@ -728,6 +858,16 @@ async def resolve_recipients(a: Audience) -> List[dict]:
         if not a.cadet_id:
             return []
         q = {"role": "parent", "child_ids": a.cadet_id}
+    elif a.mode == "appointments":
+        keys = [k for k in a.appointment_keys if k in APPOINTMENT_KEYS]
+        if not keys:
+            return []
+        app_doc = await _appointments_doc()
+        value = app_doc.get("value", {})
+        user_ids = sorted({value.get(k) for k in keys if value.get(k)})
+        if not user_ids:
+            return []
+        q = {"id": {"$in": user_ids}}
     else:
         return []
     return await db.users.find(q, {"_id": 0, "password_hash": 0}).to_list(5000)
@@ -771,20 +911,46 @@ async def root():
 
 @api_router.post("/auth/login")
 async def login(req: LoginRequest):
-    user = await db.users.find_one({"email": req.email.lower()})
+    ident = (req.email or "").strip().lower()
+    if not ident:
+        raise HTTPException(status_code=400, detail="Email or username is required")
+    user = await db.users.find_one({"$or": [{"email": ident}, {"login_username": ident}]})
     if not user or not verify_password(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid username/email or password")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"last_login_at": now_iso(), "login_reminder_sent_at": None}},
+    )
+    user["last_login_at"] = now_iso()
     token = create_access_token(user["id"], user["email"], user["role"])
     return {"access_token": token, "token_type": "bearer", "user": public_user(user)}
 
 
 @api_router.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
+    if not user.get("login_username"):
+        generated = await ensure_login_username(user.get("first_name", ""), user.get("last_name", ""), user.get("id"))
+        await db.users.update_one({"id": user["id"]}, {"$set": {"login_username": generated}})
+        user["login_username"] = generated
     data = public_user(user)
     if user["role"] in ("cadet", "parent", "cfav", "admin"):
         data["stats"] = await compute_member_stats(user["id"])
     data["appointments"] = await _user_appointments(user["id"])
+    if user["role"] == "cadet":
+        data["initial_password"] = CADET_DEFAULT_PASSWORD
     return data
+
+
+async def _event_detail_view(e: dict, user_id: str, staff: bool) -> dict:
+    view = event_view(e, user_id, staff)
+    view["attachments"] = await _fetch_attachments(e.get("attachment_ids", []))
+    if staff and e.get("bids"):
+        users = await db.users.find({"id": {"$in": e.get("bids", [])}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "role": 1, "is_uniformed": 1}).to_list(500)
+        by_id = {u["id"]: u for u in users}
+        view["bidders"] = [by_id[bid] for bid in e.get("bids", []) if bid in by_id]
+    else:
+        view["bidders"] = []
+    return view
 
 
 @api_router.post("/auth/change-password")
@@ -793,7 +959,8 @@ async def change_password(payload: ChangePassword, user: dict = Depends(get_curr
     if not verify_password(payload.current_password, full["password_hash"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     await db.users.update_one({"id": user["id"]},
-                              {"$set": {"password_hash": hash_password(payload.new_password)}})
+                              {"$set": {"password_hash": hash_password(payload.new_password),
+                                        "must_change_password": False}})
     return {"updated": True}
 
 
@@ -815,6 +982,11 @@ def _enquiry_out(e: dict) -> dict:
     e["eligibility"] = compute_eligibility(e)
     e["age_band_label"] = AGE_BANDS.get(e.get("age_band") or "", "")
     e["eligible_date"] = eligible_date(e)
+    mm = age_mismatch_info(e)
+    e["age_mismatch"] = bool(mm["is_mismatch"])
+    e["age_mismatch_reason"] = mm["reason"]
+    e["expected_age_band"] = mm["expected"]
+    e["expected_age_band_label"] = AGE_BANDS.get(mm["expected"] or "", "")
     return e
 
 
@@ -829,14 +1001,20 @@ async def enquiries_tracker(staff: dict = Depends(require_privileged_staff)):
     """Prospective-cadet enquiries grouped by joining eligibility."""
     rows = await db.enquiries.find({"age_band": {"$ne": None}}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     buckets = {"now": [], "september": [], "future": []}
+    follow_up_age_mismatch = []
     for e in rows:
         out = _enquiry_out(e)
         if out["eligibility"] in buckets:
             buckets[out["eligibility"]].append(out)
+        if out.get("age_mismatch"):
+            follow_up_age_mismatch.append(out)
     return {"buckets": buckets,
             "counts": {k: len(v) for k, v in buckets.items()},
             "labels": {"now": "Can join now", "september": "Eligible in September",
-                       "future": "Eligible in the future"}}
+                       "future": "Eligible in the future"},
+            "follow_up": {"age_mismatch": follow_up_age_mismatch},
+            "follow_up_counts": {"age_mismatch": len(follow_up_age_mismatch)},
+            "follow_up_labels": {"age_mismatch": "Follow Up - Age Mismatch"}}
 
 
 @api_router.patch("/enquiries/{enquiry_id}", response_model=Enquiry)
@@ -980,6 +1158,14 @@ class DocumentMeta(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class LearningAssignmentCreate(BaseModel):
+    document_id: str
+    cadet_ids: List[str] = []
+    instructions: str = Field(default="", max_length=4000)
+    due_date: str = Field(default="", max_length=40)
+    model_config = ConfigDict(extra="ignore")
+
+
 def _document_out(d: dict) -> dict:
     return {k: v for k, v in d.items() if k not in ("_id", "gridfs_id")}
 
@@ -993,6 +1179,44 @@ def _document_email_html(title: str, message: str, link: str, from_name: str) ->
       <p style="font-size:12px;color:#5b6b78;">Or copy this link: {link}</p>
       <p style="margin-top:18px;">&mdash; {from_name}</p>"""
     return _email_shell(title, inner)
+
+
+async def _learning_assignment_out(a: dict, viewer: Optional[dict] = None) -> dict:
+    out = {k: v for k, v in a.items() if k != "_id"}
+    doc = await db.documents.find_one({"id": a.get("document_id")}, {"_id": 0, "gridfs_id": 0})
+    out["document"] = _document_out(doc) if doc else None
+
+    cadet_ids = a.get("cadet_ids", []) or []
+    cadets = await db.users.find({"id": {"$in": cadet_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(500)
+    by_cadet = {c["id"]: c for c in cadets}
+    out["cadets"] = [{
+        "id": cid,
+        "first_name": by_cadet.get(cid, {}).get("first_name", ""),
+        "last_name": by_cadet.get(cid, {}).get("last_name", ""),
+    } for cid in cadet_ids]
+
+    submissions = await db.learning_submissions.find({"assignment_id": a["id"]}, {"_id": 0, "gridfs_id": 0}).sort("submitted_at", -1).to_list(500)
+    out["submitted_count"] = len(submissions)
+    if viewer and viewer.get("role") == "cadet":
+        out["my_submission"] = next((s for s in submissions if s.get("cadet_id") == viewer.get("id")), None)
+    else:
+        for s in submissions:
+            cadet = by_cadet.get(s.get("cadet_id"), {})
+            s["cadet_name"] = f"{cadet.get('first_name', '')} {cadet.get('last_name', '')}".strip()
+        out["submissions"] = submissions
+    return out
+
+
+async def _learning_reviewer_ids() -> List[str]:
+    app_doc = await _appointments_doc()
+    reviewer_ids = []
+    training_id = (app_doc.get("value") or {}).get("training_officer")
+    if training_id:
+        reviewer_ids.append(training_id)
+    if not reviewer_ids:
+        admins = await db.users.find({"role": "admin"}, {"_id": 0, "id": 1}).to_list(50)
+        reviewer_ids.extend(a["id"] for a in admins)
+    return list(dict.fromkeys(reviewer_ids))
 
 
 @api_router.post("/documents")
@@ -1023,7 +1247,11 @@ async def list_documents(staff: dict = Depends(require_staff)):
 
 @api_router.get("/documents/library")
 async def library_documents(user: dict = Depends(get_current_user)):
-    rows = await db.documents.find({"visible_roles": user["role"]}, {"gridfs_id": 0}).sort("created_at", -1).to_list(1000)
+    if user["role"] == "parent":
+        roles = ["parent", "cadet"]
+        rows = await db.documents.find({"visible_roles": {"$in": roles}}, {"gridfs_id": 0}).sort("created_at", -1).to_list(1000)
+    else:
+        rows = await db.documents.find({"visible_roles": user["role"]}, {"gridfs_id": 0}).sort("created_at", -1).to_list(1000)
     return [_document_out(d) for d in rows]
 
 
@@ -1085,6 +1313,164 @@ async def send_document(document_id: str, payload: DocumentSend, staff: dict = D
     return result
 
 
+@api_router.post("/learning-assignments")
+async def create_learning_assignment(payload: LearningAssignmentCreate, staff: dict = Depends(require_staff)):
+    doc = await db.documents.find_one({"id": payload.document_id}, {"_id": 0, "gridfs_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Workbook document not found")
+    cadet_ids = list(dict.fromkeys([cid for cid in payload.cadet_ids if cid]))
+    if not cadet_ids:
+        raise HTTPException(status_code=400, detail="Select at least one cadet")
+    cadet_count = await db.users.count_documents({"id": {"$in": cadet_ids}, "role": "cadet"})
+    if cadet_count != len(cadet_ids):
+        raise HTTPException(status_code=400, detail="Assignments can only be sent to cadets")
+
+    assignment = {
+        "id": str(uuid.uuid4()),
+        "document_id": payload.document_id,
+        "cadet_ids": cadet_ids,
+        "instructions": payload.instructions.strip(),
+        "due_date": (payload.due_date or "").strip(),
+        "created_by": staff["id"],
+        "created_by_name": f"{staff.get('first_name', '')} {staff.get('last_name', '')}".strip() or "Staff",
+        "created_at": now_iso(),
+    }
+    await db.learning_assignments.insert_one(assignment)
+
+    cadets = await db.users.find({"id": {"$in": cadet_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(500)
+    notes = []
+    for cadet in cadets:
+        body = payload.instructions.strip() or "Open Documents to download your workbook and submit it when complete."
+        notes.append({
+            "id": str(uuid.uuid4()),
+            "user_id": cadet["id"],
+            "title": f"New learning assigned: {doc['title']}",
+            "body": body,
+            "from_name": assignment["created_by_name"],
+            "kind": "learning_assignment",
+            "link": "/portal",
+            "link_label": "Open portal",
+            "channels": ["dashboard"],
+            "read": False,
+            "created_at": now_iso(),
+        })
+    if notes:
+        await db.notifications.insert_many(notes)
+        for note in notes:
+            await push_to_user(note["user_id"], note["title"], note["body"], "/portal")
+
+    return await _learning_assignment_out(assignment)
+
+
+@api_router.get("/learning-assignments/staff")
+async def list_learning_assignments_staff(staff: dict = Depends(require_staff)):
+    rows = await db.learning_assignments.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return [await _learning_assignment_out(r) for r in rows]
+
+
+@api_router.get("/learning-assignments/my")
+async def list_my_learning_assignments(user: dict = Depends(get_current_user)):
+    if user["role"] == "cadet":
+        rows = await db.learning_assignments.find({"cadet_ids": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return [await _learning_assignment_out(r, viewer=user) for r in rows]
+    if user["role"] == "parent":
+        linked = user.get("child_ids", []) or []
+        if not linked:
+            return []
+        rows = await db.learning_assignments.find({"cadet_ids": {"$in": linked}}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return [await _learning_assignment_out(r) for r in rows]
+    return []
+
+
+@api_router.post("/learning-assignments/{assignment_id}/submit")
+async def submit_learning_assignment(
+        assignment_id: str, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if user["role"] != "cadet":
+        raise HTTPException(status_code=403, detail="Cadets only")
+    assignment = await db.learning_assignments.find_one({"id": assignment_id}, {"_id": 0})
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Learning assignment not found")
+    if user["id"] not in (assignment.get("cadet_ids", []) or []):
+        raise HTTPException(status_code=403, detail="This assignment is not for you")
+    data = await file.read()
+    if len(data) > 15 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 15 MB).")
+
+    existing = await db.learning_submissions.find_one({"assignment_id": assignment_id, "cadet_id": user["id"]}, {"_id": 0})
+    fid = existing.get("id") if existing else str(uuid.uuid4())
+    gid = await fs.upload_from_stream(
+        file.filename or "submission",
+        data,
+        metadata={"learning_submission_id": fid, "content_type": file.content_type},
+    )
+    if existing:
+        try:
+            await fs.delete(ObjectId(existing["gridfs_id"]))
+        except Exception:
+            pass
+
+    submission = {
+        "id": fid,
+        "assignment_id": assignment_id,
+        "cadet_id": user["id"],
+        "filename": file.filename or "submission",
+        "content_type": file.content_type or "application/octet-stream",
+        "size": len(data),
+        "gridfs_id": str(gid),
+        "submitted_at": now_iso(),
+    }
+    await db.learning_submissions.update_one(
+        {"assignment_id": assignment_id, "cadet_id": user["id"]},
+        {"$set": submission},
+        upsert=True,
+    )
+
+    workbook = await db.documents.find_one({"id": assignment.get("document_id")}, {"_id": 0, "title": 1})
+    cadet_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip() or "Cadet"
+    reviewers = await _learning_reviewer_ids()
+    notifications = []
+    for reviewer_id in reviewers:
+        notifications.append({
+            "id": str(uuid.uuid4()),
+            "user_id": reviewer_id,
+            "title": f"Workbook submitted: {workbook.get('title', 'Learning assignment') if workbook else 'Learning assignment'}",
+            "body": f"{cadet_name} has uploaded completed work for marking.",
+            "from_name": cadet_name,
+            "kind": "learning_submission",
+            "link": f"/api/learning-submissions/{submission['id']}/download",
+            "link_label": "Download submission",
+            "channels": ["dashboard"],
+            "read": False,
+            "created_at": now_iso(),
+        })
+    if notifications:
+        await db.notifications.insert_many(notifications)
+        for note in notifications:
+            await push_to_user(note["user_id"], note["title"], note["body"], "/portal")
+
+    return {k: v for k, v in submission.items() if k != "gridfs_id"}
+
+
+@api_router.get("/learning-submissions/{submission_id}/download")
+async def download_learning_submission(submission_id: str, user: dict = Depends(get_current_user)):
+    submission = await db.learning_submissions.find_one({"id": submission_id}, {"_id": 0})
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if user["role"] == "cadet":
+        if submission.get("cadet_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    elif user["role"] == "parent":
+        linked = user.get("child_ids", []) or []
+        if submission.get("cadet_id") not in linked:
+            raise HTTPException(status_code=403, detail="Forbidden")
+    elif user["role"] not in ("admin", "cfav"):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    stream = await fs.open_download_stream(ObjectId(submission["gridfs_id"]))
+    data = await stream.read()
+    return Response(content=data, media_type=submission["content_type"],
+                    headers={"Content-Disposition": f'inline; filename="{submission["filename"]}"'})
+
+
 # ---------------------------------------------------------------------------
 # Blog / News (staff author; published posts are public + shown in portal)
 # ---------------------------------------------------------------------------
@@ -1099,6 +1485,7 @@ class BlogCreate(BaseModel):
     body: str = Field(..., min_length=1, max_length=40000)
     cover_image_url: str = Field(default="", max_length=1000)
     images: List[str] = []
+    facebook_post_url: str = Field(default="", max_length=2000)
     status: str = "draft"  # draft | published
     model_config = ConfigDict(extra="ignore")
 
@@ -1111,7 +1498,8 @@ def _blog_public(b: dict) -> dict:
     return {"title": b["title"], "slug": b["slug"], "excerpt": b.get("excerpt", ""),
             "cover_image_url": b.get("cover_image_url", ""), "images": b.get("images", []),
             "body": b.get("body", ""), "author_name": b.get("author_name", ""),
-            "published_at": b.get("published_at")}
+            "published_at": b.get("published_at"),
+            "facebook_post_url": b.get("facebook_post_url", "")}
 
 
 @api_router.post("/blogs")
@@ -1119,7 +1507,8 @@ async def create_blog(payload: BlogCreate, staff: dict = Depends(require_staff))
     now = now_iso()
     b = {"id": str(uuid.uuid4()), "slug": _slugify(payload.title),
          "title": payload.title, "excerpt": payload.excerpt, "body": payload.body,
-         "cover_image_url": payload.cover_image_url, "images": payload.images,
+            "cover_image_url": payload.cover_image_url, "images": payload.images,
+            "facebook_post_url": payload.facebook_post_url,
          "status": payload.status if payload.status in ("draft", "published") else "draft",
          "author_id": staff["id"],
          "author_name": f"{staff.get('first_name','')} {staff.get('last_name','')}".strip() or "Staff",
@@ -1141,7 +1530,8 @@ async def update_blog(blog_id: str, payload: BlogCreate, staff: dict = Depends(r
     if not existing:
         raise HTTPException(status_code=404, detail="Post not found")
     upd = {"title": payload.title, "excerpt": payload.excerpt, "body": payload.body,
-           "cover_image_url": payload.cover_image_url, "images": payload.images,
+            "cover_image_url": payload.cover_image_url, "images": payload.images,
+            "facebook_post_url": payload.facebook_post_url,
            "status": payload.status if payload.status in ("draft", "published") else "draft",
            "updated_at": now_iso()}
     if payload.status == "published" and not existing.get("published_at"):
@@ -1190,7 +1580,8 @@ async def public_blogs():
     rows = await db.blogs.find({"status": "published"}, {"_id": 0}).sort("published_at", -1).to_list(200)
     return [{"title": b["title"], "slug": b["slug"], "excerpt": b.get("excerpt", ""),
              "cover_image_url": b.get("cover_image_url", ""), "author_name": b.get("author_name", ""),
-             "published_at": b.get("published_at")} for b in rows]
+             "published_at": b.get("published_at"), "facebook_post_url": b.get("facebook_post_url", "")}
+            for b in rows]
 
 
 @api_router.get("/public/blogs/{slug}")
@@ -1224,12 +1615,22 @@ async def list_users(staff: dict = Depends(require_privileged_staff), role: Opti
 async def create_user(payload: UserCreate, staff: dict = Depends(require_privileged_staff)):
     if payload.role not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
-    existing = await db.users.find_one({"email": payload.email.lower()})
-    if existing:
-        raise HTTPException(status_code=400, detail="A user with this email already exists")
+    email = (str(payload.email).strip().lower() if payload.email else "")
+    if payload.role != "cadet" and not email:
+        raise HTTPException(status_code=400, detail="Email is required for this role")
+    if payload.role != "cadet" and len((payload.password or "")) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if email:
+        existing = await db.users.find_one({"email": email})
+        if existing:
+            raise HTTPException(status_code=400, detail="A user with this email already exists")
+    username = await ensure_login_username(payload.first_name, payload.last_name)
+    chosen_password = CADET_DEFAULT_PASSWORD if payload.role == "cadet" else payload.password
     user = {
-        "id": str(uuid.uuid4()), "email": payload.email.lower(),
-        "password_hash": hash_password(payload.password), "role": payload.role,
+        "id": str(uuid.uuid4()), "email": email,
+        "password_hash": hash_password(chosen_password), "role": payload.role,
+        "login_username": username,
+        "must_change_password": payload.role == "cadet",
         "first_name": payload.first_name, "last_name": payload.last_name,
         "is_uniformed": bool(payload.is_uniformed) if payload.role == "cfav" else None,
         "child_ids": payload.child_ids if payload.role == "parent" else [],
@@ -1237,6 +1638,232 @@ async def create_user(payload: UserCreate, staff: dict = Depends(require_privile
     }
     await db.users.insert_one(user)
     return public_user(user)
+
+
+@api_router.post("/users/import-upload")
+async def import_users_upload(
+        file: UploadFile = File(...),
+        role_hint: str = Form(""),
+        staff: dict = Depends(require_privileged_staff)):
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large (maximum 10MB).")
+
+    filename = (file.filename or "").lower()
+    records: List[dict]
+    try:
+        if filename.endswith(".csv"):
+            import pandas as pd
+            df = pd.read_csv(io.BytesIO(data))
+            records = _extract_registration_rows(df.fillna("").to_dict(orient="records"), role_hint=role_hint)
+        elif filename.endswith(".xlsx") or filename.endswith(".xls"):
+            import pandas as pd
+            df = pd.read_excel(io.BytesIO(data))
+            records = _extract_registration_rows(df.fillna("").to_dict(orient="records"), role_hint=role_hint)
+        elif filename.endswith(".docx"):
+            records = _parse_docx_registration_rows(data, role_hint=role_hint)
+        else:
+            raise HTTPException(status_code=400, detail="Please upload .xlsx, .xls, .csv or .docx.")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not read file: {exc}")
+
+    if not records:
+        raise HTTPException(status_code=400, detail="No valid cadet/CFAV rows found.")
+
+    created, skipped, errors = [], [], []
+    for idx, rec in enumerate(records, start=1):
+        role = rec.get("role", "")
+        first_name = (rec.get("first_name") or "").strip()
+        last_name = (rec.get("last_name") or "").strip()
+        email = (rec.get("email") or "").strip().lower()
+        is_uniformed = bool(rec.get("is_uniformed", False))
+        try:
+            if role not in {"cadet", "cfav"}:
+                errors.append({"row": idx, "reason": "Role must be cadet or cfav"})
+                continue
+            if role == "cfav":
+                if not email:
+                    errors.append({"row": idx, "reason": "CFAV row requires RAFAC email"})
+                    continue
+                if not _is_rafac_email(email):
+                    errors.append({"row": idx, "reason": "CFAV email must end @rafac.mod.gov.uk"})
+                    continue
+
+            existing = await _find_registration_duplicate(role, first_name, last_name, email)
+            if existing:
+                skipped.append({
+                    "row": idx,
+                    "reason": "Already exists",
+                    "name": f"{existing.get('first_name', '')} {existing.get('last_name', '')}".strip(),
+                    "role": existing.get("role", role),
+                    "login_username": existing.get("login_username", ""),
+                })
+                continue
+
+            user = await _create_registered_user(role, first_name, last_name, email, is_uniformed)
+            created.append({
+                "id": user["id"],
+                "role": user["role"],
+                "name": f"{user.get('first_name', '')} {user.get('last_name', '')}".strip(),
+                "login_username": user.get("login_username", ""),
+                "email": user.get("email", ""),
+                "password": CADET_DEFAULT_PASSWORD,
+                "must_change_password": True,
+            })
+        except Exception as exc:
+            errors.append({"row": idx, "reason": str(exc)})
+
+    return {
+        "created": len(created),
+        "skipped": len(skipped),
+        "errors": len(errors),
+        "created_users": created,
+        "skipped_rows": skipped,
+        "error_rows": errors,
+        "default_password": CADET_DEFAULT_PASSWORD,
+    }
+
+
+@api_router.get("/users/import-template")
+async def users_import_template(
+        format: str = "xlsx",
+        role: str = "cadet",
+        staff: dict = Depends(require_privileged_staff)):
+    role_key = _normalise_role(role)
+    if role_key not in {"cadet", "cfav"}:
+        raise HTTPException(status_code=400, detail="role must be cadet or cfav")
+
+    rows = [
+        {
+            "role": role_key,
+            "first_name": "Sam",
+            "last_name": "Cadet" if role_key == "cadet" else "Instructor",
+            "email": "" if role_key == "cadet" else "sam.instructor@rafac.mod.gov.uk",
+            "is_uniformed": "" if role_key == "cadet" else "yes",
+        },
+        {
+            "role": role_key,
+            "first_name": "Alex",
+            "last_name": "Example",
+            "email": "" if role_key == "cadet" else "alex.example@rafac.mod.gov.uk",
+            "is_uniformed": "" if role_key == "cadet" else "no",
+        },
+    ]
+
+    fmt = (format or "xlsx").strip().lower()
+    if fmt in {"xlsx", "excel"}:
+        import pandas as pd
+
+        df = pd.DataFrame(rows, columns=["role", "first_name", "last_name", "email", "is_uniformed"])
+        out = io.BytesIO()
+        with pd.ExcelWriter(out, engine="openpyxl") as writer:
+            df.to_excel(writer, sheet_name="members", index=False)
+        body = out.getvalue()
+        name = f"member-import-template-{role_key}.xlsx"
+        return Response(
+            content=body,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    if fmt in {"docx", "word"}:
+        from docx import Document as DocxDocument
+
+        doc = DocxDocument()
+        doc.add_heading("1471 Member Import Template", level=1)
+        doc.add_paragraph("Complete the table, then upload this file in Members > Import Excel/CSV/Word.")
+        table = doc.add_table(rows=1, cols=5)
+        heads = ["role", "first_name", "last_name", "email", "is_uniformed"]
+        for idx, head in enumerate(heads):
+            table.rows[0].cells[idx].text = head
+        for row in rows:
+            cells = table.add_row().cells
+            cells[0].text = row["role"]
+            cells[1].text = row["first_name"]
+            cells[2].text = row["last_name"]
+            cells[3].text = row["email"]
+            cells[4].text = row["is_uniformed"]
+        out = io.BytesIO()
+        doc.save(out)
+        body = out.getvalue()
+        name = f"member-import-template-{role_key}.docx"
+        return Response(
+            content=body,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{name}"'},
+        )
+
+    raise HTTPException(status_code=400, detail="format must be xlsx or docx")
+
+
+@api_router.get("/users/register-qr")
+async def users_register_qr(
+        role: str = "cadet",
+        base_url: str = "",
+        staff: dict = Depends(require_privileged_staff)):
+    role_key = _normalise_role(role)
+    if role_key not in {"cadet", "cfav"}:
+        raise HTTPException(status_code=400, detail="role must be cadet or cfav")
+
+    root = (base_url or "").strip()
+    if not root:
+        root = str(os.environ.get("PUBLIC_APP_URL") or os.environ.get("CORS_ORIGINS", "").split(",")[0]).strip()
+    if not root:
+        root = "https://1471squadron.co.uk"
+    root = root.rstrip("/")
+    if not root.startswith("http://") and not root.startswith("https://"):
+        root = f"https://{root}"
+    target = f"{root}/register?role={role_key}"
+
+    try:
+        import qrcode
+    except Exception:
+        raise HTTPException(status_code=500, detail="QR generator is unavailable on this server")
+
+    img = qrcode.make(target)
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    filename = f"register-{role_key}-qr.png"
+    return Response(
+        content=out.getvalue(),
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@api_router.post("/public/register-self")
+async def register_self(payload: SelfRegisterRequest):
+    role = _normalise_role(payload.role)
+    if role not in {"cadet", "cfav"}:
+        raise HTTPException(status_code=400, detail="Role must be cadet or cfav")
+
+    first_name = payload.first_name.strip()
+    last_name = payload.last_name.strip()
+    email = (str(payload.email).strip().lower() if payload.email else "")
+    if role == "cfav":
+        if not email:
+            raise HTTPException(status_code=400, detail="RAFAC email is required for CFAV registration")
+        if not _is_rafac_email(email):
+            raise HTTPException(status_code=400, detail="CFAV email must end @rafac.mod.gov.uk")
+
+    existing = await _find_registration_duplicate(role, first_name, last_name, email)
+    if existing:
+        raise HTTPException(status_code=400, detail="An account for these details already exists")
+
+    user = await _create_registered_user(role, first_name, last_name, email, bool(payload.is_uniformed))
+    return {
+        "created": True,
+        "role": user["role"],
+        "login_username": user.get("login_username", ""),
+        "email": user.get("email", ""),
+        "default_password": CADET_DEFAULT_PASSWORD,
+        "must_change_password": True,
+    }
 
 
 @api_router.patch("/users/{user_id}")
@@ -1252,6 +1879,13 @@ async def update_user(user_id: str, payload: UserUpdate, staff: dict = Depends(r
             updates["is_uniformed"] = None
     if "role" in updates and updates["role"] not in ALL_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
+    if "first_name" in updates or "last_name" in updates:
+        existing = await db.users.find_one({"id": user_id}, {"_id": 0, "first_name": 1, "last_name": 1})
+        if not existing:
+            raise HTTPException(status_code=404, detail="User not found")
+        new_first = updates.get("first_name", existing.get("first_name", ""))
+        new_last = updates.get("last_name", existing.get("last_name", ""))
+        updates["login_username"] = await ensure_login_username(new_first, new_last, user_id)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     res = await db.users.find_one_and_update(
@@ -1265,10 +1899,25 @@ async def update_user(user_id: str, payload: UserUpdate, staff: dict = Depends(r
 @api_router.post("/users/{user_id}/reset-password")
 async def reset_user_password(user_id: str, payload: ResetPassword, staff: dict = Depends(require_privileged_staff)):
     res = await db.users.update_one({"id": user_id},
-                                    {"$set": {"password_hash": hash_password(payload.new_password)}})
+                                    {"$set": {"password_hash": hash_password(payload.new_password),
+                                              "must_change_password": True}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"updated": True}
+
+
+@api_router.post("/users/{user_id}/reset-cadet-password")
+async def reset_cadet_password(user_id: str, staff: dict = Depends(require_privileged_staff)):
+    target = await db.users.find_one({"id": user_id}, {"_id": 0, "role": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target.get("role") != "cadet":
+        raise HTTPException(status_code=400, detail="This reset is for cadet accounts only")
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password_hash": hash_password(CADET_DEFAULT_PASSWORD), "must_change_password": True}},
+    )
+    return {"updated": True, "default_password": CADET_DEFAULT_PASSWORD}
 
 
 @api_router.delete("/users/{user_id}")
@@ -1276,8 +1925,6 @@ async def delete_user(user_id: str, staff: dict = Depends(require_privileged_sta
     target = await db.users.find_one({"id": user_id})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    if target["role"] == "admin":
-        raise HTTPException(status_code=400, detail="Cannot delete the admin account")
     await db.users.delete_one({"id": user_id})
     return {"deleted": True}
 
@@ -1348,6 +1995,138 @@ def _badge_list(val) -> List[str]:
         seen.add(k)
         uniq.append(x)
     return uniq[:20]
+
+
+def _normalise_role(value: str) -> str:
+    v = (value or "").strip().lower()
+    if v in {"cadet", "c"}:
+        return "cadet"
+    if v in {"cfav", "staff", "adult", "volunteer"}:
+        return "cfav"
+    if v in {"admin", "parent"}:
+        return v
+    return ""
+
+
+def _to_bool(value) -> Optional[bool]:
+    if isinstance(value, bool):
+        return value
+    s = str(value or "").strip().lower()
+    if not s:
+        return None
+    if s in {"1", "true", "yes", "y", "uniformed", "u", "commissioned", "ci", "snp"}:
+        return True
+    if s in {"0", "false", "no", "n", "non-uniformed", "non uniformed", "civilian", "none"}:
+        return False
+    return None
+
+
+def _is_rafac_email(email: str) -> bool:
+    return (email or "").strip().lower().endswith("@rafac.mod.gov.uk")
+
+
+def _extract_registration_rows(rows: List[dict], role_hint: str = "") -> List[dict]:
+    if not rows:
+        return []
+    cols = [str(c) for c in rows[0].keys()]
+    role_col = _pick_col(cols, ["role", "member type", "type", "account type"])
+    first_col = _pick_col(cols, ["first name", "firstname", "given name", "forename"])
+    last_col = _pick_col(cols, ["last name", "lastname", "surname", "family name"])
+    full_name_col = _pick_col(cols, ["name", "full name", "cadet name", "member name"])
+    email_col = _pick_col(cols, ["email", "email address", "rafac email", "staff email"])
+    uniformed_col = _pick_col(cols, ["is uniformed", "uniformed", "uniform", "cfav uniformed"])
+
+    out = []
+    hint = _normalise_role(role_hint)
+    for row in rows:
+        role = _normalise_role(str(row.get(role_col, ""))) if role_col else ""
+        role = role or hint
+        if role not in {"cadet", "cfav"}:
+            continue
+
+        first = str(row.get(first_col, "")).strip() if first_col else ""
+        last = str(row.get(last_col, "")).strip() if last_col else ""
+        if (not first or not last) and full_name_col:
+            full = str(row.get(full_name_col, "")).strip()
+            if full:
+                parts = full.split()
+                if parts and not first:
+                    first = parts[0]
+                if len(parts) > 1 and not last:
+                    last = " ".join(parts[1:])
+        if not first:
+            continue
+
+        email = str(row.get(email_col, "")).strip().lower() if email_col else ""
+        is_uniformed = _to_bool(row.get(uniformed_col, "")) if uniformed_col else None
+        out.append({
+            "role": role,
+            "first_name": first,
+            "last_name": last,
+            "email": email,
+            "is_uniformed": bool(is_uniformed) if is_uniformed is not None else False,
+        })
+    return out
+
+
+def _parse_docx_registration_rows(data: bytes, role_hint: str = "") -> List[dict]:
+    from docx import Document as DocxDocument
+
+    doc = DocxDocument(io.BytesIO(data))
+    rows = []
+    for table in doc.tables:
+        table_rows = []
+        for row in table.rows:
+            table_rows.append([c.text.strip() for c in row.cells])
+        if len(table_rows) < 2:
+            continue
+        headers = [h.strip() for h in table_rows[0]]
+        for vals in table_rows[1:]:
+            rec = {}
+            for idx, head in enumerate(headers):
+                if head:
+                    rec[head] = vals[idx].strip() if idx < len(vals) else ""
+            if rec:
+                rows.append(rec)
+    return _extract_registration_rows(rows, role_hint=role_hint)
+
+
+async def _find_registration_duplicate(role: str, first_name: str, last_name: str, email: str) -> Optional[dict]:
+    if email:
+        existing = await db.users.find_one({"email": email}, {"_id": 0})
+        if existing:
+            return existing
+    if role == "cadet":
+        return await db.users.find_one({
+            "role": "cadet",
+            "first_name": {"$regex": f"^{re.escape(first_name)}$", "$options": "i"},
+            "last_name": {"$regex": f"^{re.escape(last_name)}$", "$options": "i"},
+        }, {"_id": 0})
+    return None
+
+
+async def _create_registered_user(role: str, first_name: str, last_name: str, email: str, is_uniformed: bool) -> dict:
+    username = await ensure_login_username(first_name, last_name)
+    stored_email = (email or "").strip().lower()
+    if role == "cadet" and not stored_email:
+        stored_email = f"{username}@cadet.local"
+
+    user = {
+        "id": str(uuid.uuid4()),
+        "email": stored_email,
+        "password_hash": hash_password(CADET_DEFAULT_PASSWORD),
+        "role": role,
+        "login_username": username,
+        "must_change_password": True,
+        "first_name": first_name,
+        "last_name": last_name,
+        "is_uniformed": bool(is_uniformed) if role == "cfav" else None,
+        "child_ids": [],
+        "bonus_points": 0,
+        "created_at": now_iso(),
+    }
+    await db.users.insert_one(user)
+    return user
 
 
 async def _send_classification_stagnation_alerts() -> dict:
@@ -1777,6 +2556,80 @@ async def update_training_slot(slot_id: str, payload: TrainingPlanSlotUpdate,
     return _slot_out(res, month_idx)
 
 
+@api_router.post("/training-plan/publish-month")
+async def publish_training_plan_month(month: str, staff: dict = Depends(require_privileged_staff)):
+    if not re.match(r"^\d{4}-\d{2}$", month or ""):
+        raise HTTPException(status_code=400, detail="Month must be YYYY-MM")
+    rows = await db.training_plan.find({
+        "slot_date": {"$gte": f"{month}-01", "$lt": f"{month}-32"}
+    }, {"_id": 0}).sort("slot_date", 1).to_list(500)
+
+    created = 0
+    updated = 0
+    removed = 0
+    for r in rows:
+        slot_id = r.get("id")
+        if not slot_id:
+            continue
+        slot_date = r["slot_date"]
+        no_parade = bool(r.get("no_parade", False))
+        p1 = (r.get("first_period_activity", "") or "").strip()
+        p2 = (r.get("second_period_activity", "") or "").strip()
+        uniform = (r.get("uniform_needed", "") or "").strip()
+
+        # If no activity is planned or marked no parade, clear any previously published event for this slot.
+        if no_parade or (not p1 and not p2):
+            res = await db.events.delete_one({"training_slot_id": slot_id, "source": "training_plan"})
+            if res.deleted_count:
+                removed += 1
+            continue
+
+        title = p1 or p2 or f"Training Night {slot_date}"
+        desc_lines = []
+        if p1:
+            desc_lines.append(f"First period: {p1}")
+        if p2:
+            desc_lines.append(f"Second period: {p2}")
+        if uniform:
+            desc_lines.append(f"Uniform: {uniform}")
+        description = "\n".join(desc_lines)
+
+        start_iso = f"{slot_date}T19:00:00+00:00"
+        end_iso = f"{slot_date}T21:30:00+00:00"
+        now = now_iso()
+        existing = await db.events.find_one({"training_slot_id": slot_id, "source": "training_plan"}, {"_id": 0})
+        event_doc = {
+            "title": title,
+            "description": description,
+            "location": "Squadron HQ",
+            "start": start_iso,
+            "end": end_iso,
+            "capacity": 0,
+            "event_type": "standard",
+            "participation": "attend",
+            "points_value": 10,
+            "updated_at": now,
+            "updated_by": staff["id"],
+            "training_slot_id": slot_id,
+            "source": "training_plan",
+        }
+        if existing:
+            await db.events.update_one({"id": existing["id"]}, {"$set": event_doc})
+            updated += 1
+        else:
+            await db.events.insert_one({
+                "id": str(uuid.uuid4()),
+                **event_doc,
+                "bids": [],
+                "attendees": [],
+                "created_at": now,
+                "created_by": staff["id"],
+            })
+            created += 1
+
+    return {"month": month, "created": created, "updated": updated, "removed": removed}
+
+
 @api_router.post("/training-plan/{slot_id}/bid")
 async def submit_training_bid(slot_id: str, payload: TrainingPlanBidCreate,
                               cfav: dict = Depends(require_roles("cfav"))):
@@ -1904,23 +2757,310 @@ async def apply_training_template(month: str, staff: dict = Depends(require_priv
     return {"applied": True, "month": month, "updated": updated}
 
 
+def _escape_pdf_text(v: str) -> str:
+    return (v or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _simple_training_plan_pdf(month: str, rows: List[dict], role_names: dict) -> bytes:
+    """Fallback PDF builder used when ReportLab is unavailable.
+
+    Produces a valid single-page PDF with monospaced text rows.
+    """
+    lines = [
+        "1471 Horwich Squadron RAF Air Cadets",
+        f"Training Plan - {month}",
+        "",
+        f"Training Officer: {role_names.get('training_officer', 'TBC')}    Adjutant: {role_names.get('adjutant', 'TBC')}",
+        f"Stores: {role_names.get('stores_officer', 'TBC')}    Community: {role_names.get('community_officer', 'TBC')}    H&S: {role_names.get('health_safety_officer', 'TBC')}",
+        f"Generated: {datetime.now().strftime('%d %b %Y %H:%M')} UTC",
+        "",
+        "Day/Date         First period activity              Second period activity             Uniform",
+        "----------------------------------------------------------------------------------------------",
+    ]
+
+    for r in rows[:55]:
+        sd = date.fromisoformat(r["slot_date"])
+        daydate = f"{sd.strftime('%a')} {sd.strftime('%d %b')}"
+        p1 = (r.get("first_period_activity", "") or "")[:32]
+        p2 = (r.get("second_period_activity", "") or "")[:32]
+        un = (r.get("uniform_needed", "") or "")[:14]
+        lines.append(f"{daydate:<16}{p1:<36}{p2:<36}{un:<14}")
+
+    content_lines = ["BT", "/F1 10 Tf", "50 790 Td", "12 TL"]
+    for idx, line in enumerate(lines):
+        esc = _escape_pdf_text(line)
+        if idx == 0:
+            content_lines.append(f"({esc}) Tj")
+        else:
+            content_lines.append("T*")
+            content_lines.append(f"({esc}) Tj")
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode("latin-1", errors="replace")
+
+    objs = []
+
+    def add_obj(payload: bytes) -> int:
+        objs.append(payload)
+        return len(objs)
+
+    catalog_id = add_obj(b"<< /Type /Catalog /Pages 2 0 R >>")
+    pages_id = add_obj(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    page_id = add_obj(b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>")
+    font_id = add_obj(b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>")
+    content_id = add_obj(f"<< /Length {len(stream)} >>\nstream\n".encode("ascii") + stream + b"\nendstream")
+
+    out = io.BytesIO()
+    out.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for i, payload in enumerate(objs, start=1):
+        offsets.append(out.tell())
+        out.write(f"{i} 0 obj\n".encode("ascii"))
+        out.write(payload)
+        out.write(b"\nendobj\n")
+
+    xref_pos = out.tell()
+    out.write(f"xref\n0 {len(objs) + 1}\n".encode("ascii"))
+    out.write(b"0000000000 65535 f \n")
+    for off in offsets[1:]:
+        out.write(f"{off:010d} 00000 n \n".encode("ascii"))
+
+    out.write(
+        f"trailer\n<< /Size {len(objs) + 1} /Root {catalog_id} 0 R >>\nstartxref\n{xref_pos}\n%%EOF".encode("ascii")
+    )
+    return out.getvalue()
+
+
+def _training_plan_html_document(month: str, rows: List[dict], role_names: dict) -> str:
+        generated = datetime.now().strftime("%d %b %Y %H:%M UTC")
+        safe_month = html.escape(month)
+        crest_url = html.escape(
+                os.environ.get(
+                        "SQUADRON_CREST_URL",
+                        "https://customer-assets.emergentagent.com/job_283d297f-7217-4e9a-b0b5-b0baa4b4d8bf/artifacts/nmvg3tzu_1471%20crest%20transparent.png",
+                )
+        )
+
+        def cell(v: str) -> str:
+                return html.escape(v or "")
+
+        def render_row(r: dict) -> str:
+                sd = date.fromisoformat(r["slot_date"])
+                day_name = sd.strftime("%A")
+                day_date = sd.strftime("%d %b %Y")
+                first = r.get("first_period_activity", "") or ""
+                second = r.get("second_period_activity", "") or ""
+                uniform = r.get("uniform_needed", "") or ""
+                no_parade = bool(r.get("no_parade", False))
+                reason = r.get("no_parade_reason", "") or ""
+                cls = "no-parade" if no_parade else ""
+                status = "No parade" if no_parade else "Planned"
+                if no_parade and reason:
+                        status = f"No parade - {reason}"
+                return f"""
+                <tr class=\"{cls}\">
+                    <td><div class=\"day\">{cell(day_name)}</div><div class=\"date\">{cell(day_date)}</div></td>
+                    <td>{cell(first)}</td>
+                    <td>{cell(second)}</td>
+                    <td>{cell(uniform)}</td>
+                    <td><span class=\"status {'status-np' if no_parade else 'status-ok'}\">{cell(status)}</span></td>
+                </tr>
+                """.strip()
+
+        rows_per_page = 14
+        chunks = [rows[i:i + rows_per_page] for i in range(0, len(rows), rows_per_page)] or [[]]
+        pages_html = []
+        for idx, chunk in enumerate(chunks):
+                page_rows = "\n".join(render_row(r) for r in chunk) if chunk else (
+                        "<tr><td colspan=\"5\" class=\"empty\">No training slots were found for this month.</td></tr>"
+                )
+                pages_html.append(f"""
+                <section class=\"page {'last-page' if idx == len(chunks) - 1 else ''}\">
+                    <div class=\"sheet\">
+                        <header class=\"hero\">
+                            <div class=\"hero-left\">
+                                <img src=\"{crest_url}\" alt=\"1471 Horwich Squadron crest\" class=\"crest\" />
+                                <div>
+                                    <div class=\"kicker\">1471 Horwich Squadron RAF Air Cadets</div>
+                                    <h1>Training Programme</h1>
+                                    <p class=\"subtitle\">Month: {safe_month} · Page {idx + 1} of {len(chunks)}</p>
+                                </div>
+                            </div>
+                        </header>
+
+                        <section class=\"meta\">
+                            <div class=\"item\"><strong>Generated:</strong> {cell(generated)}</div>
+                            <div class=\"item\"><strong>Document:</strong> Monthly training programme planner</div>
+                        </section>
+
+                        <section class=\"appointments\">
+                            <div class=\"app\"><div class=\"label\">Training Officer</div><div class=\"value\">{cell(role_names.get('training_officer', 'TBC'))}</div></div>
+                            <div class=\"app\"><div class=\"label\">Adjutant</div><div class=\"value\">{cell(role_names.get('adjutant', 'TBC'))}</div></div>
+                            <div class=\"app\"><div class=\"label\">Stores Officer</div><div class=\"value\">{cell(role_names.get('stores_officer', 'TBC'))}</div></div>
+                            <div class=\"app\"><div class=\"label\">Community Officer</div><div class=\"value\">{cell(role_names.get('community_officer', 'TBC'))}</div></div>
+                            <div class=\"app\"><div class=\"label\">Health & Safety</div><div class=\"value\">{cell(role_names.get('health_safety_officer', 'TBC'))}</div></div>
+                        </section>
+
+                        <div class=\"wrap\">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style=\"width:17%\">Day / Date</th>
+                                        <th style=\"width:28%\">First Period Activity</th>
+                                        <th style=\"width:28%\">Second Period Activity</th>
+                                        <th style=\"width:14%\">Uniform Needed</th>
+                                        <th style=\"width:13%\">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {page_rows}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <footer class=\"foot\">
+                            1471 Horwich Squadron RAF Air Cadets · Internal planning copy · For authorised staff use.
+                        </footer>
+                    </div>
+                </section>
+                """)
+
+        return f"""<!doctype html>
+<html lang=\"en\">
+<head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>1471 Horwich Squadron - Training Plan {safe_month}</title>
+    <style>
+        :root {{
+            --raf-navy: #071A2F;
+            --raf-blue: #00529B;
+            --raf-sky: #DDEFFC;
+            --raf-red: #C60C30;
+            --ink: #1B2430;
+            --slate: #5B6B78;
+            --paper: #F5FAFF;
+            --border: #C8D9E6;
+        }}
+        * {{ box-sizing: border-box; }}
+        body {{
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            color: var(--ink);
+            background: linear-gradient(165deg, #f7fbff 0%, #edf5fb 100%);
+            padding: 28px;
+        }}
+        .page {{ margin-bottom: 24px; }}
+        .page.last-page {{ margin-bottom: 0; }}
+        .sheet {{
+            max-width: 1100px;
+            margin: 0 auto;
+            background: #fff;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 30px rgba(7, 26, 47, 0.08);
+            overflow: hidden;
+        }}
+        .hero {{
+            background: linear-gradient(135deg, var(--raf-navy) 0%, var(--raf-blue) 100%);
+            color: #fff;
+            padding: 22px 26px 20px;
+            border-bottom: 6px solid var(--raf-red);
+            position: relative;
+        }}
+        .hero-left {{ display: flex; align-items: center; gap: 14px; position: relative; z-index: 1; }}
+        .crest {{ width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.25)); flex: 0 0 auto; }}
+        .hero::after {{
+            content: "";
+            position: absolute;
+            right: -80px;
+            top: -80px;
+            width: 210px;
+            height: 210px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.16), rgba(255,255,255,0.03));
+        }}
+        .kicker {{ letter-spacing: .12em; text-transform: uppercase; font-size: 11px; color: #9ed1ff; font-weight: 700; }}
+        h1 {{ margin: 8px 0 4px; font-size: 30px; line-height: 1.08; }}
+        .subtitle {{ margin: 0; color: #dcecff; font-size: 14px; }}
+        .meta {{
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 12px;
+            padding: 16px 20px;
+            background: var(--paper);
+            border-bottom: 1px solid var(--border);
+            font-size: 13px;
+        }}
+        .meta .item strong {{ color: var(--raf-navy); }}
+        .appointments {{
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            background: #fff;
+        }}
+        .app {{ padding: 12px 14px; border-right: 1px solid var(--border); min-height: 62px; }}
+        .app:last-child {{ border-right: 0; }}
+        .app .label {{ font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--slate); font-weight: 700; }}
+        .app .value {{ margin-top: 5px; font-size: 13px; color: var(--raf-navy); font-weight: 700; }}
+        .wrap {{ padding: 16px 18px 20px; }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+        th {{
+            background: var(--raf-navy);
+            color: #fff;
+            text-align: left;
+            font-size: 11px;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            padding: 10px 9px;
+            border: 1px solid #122944;
+        }}
+        td {{ border: 1px solid var(--border); padding: 9px; vertical-align: top; }}
+        td .day {{ font-weight: 700; color: var(--raf-navy); }}
+        td .date {{ font-size: 11px; color: var(--slate); margin-top: 2px; }}
+        tr:nth-child(even) td {{ background: #fcfeff; }}
+        tr.no-parade td {{ background: #fff3f3; }}
+        .status {{ display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 11px; font-weight: 700; }}
+        .status-ok {{ background: #e7f6ec; color: #116c2f; }}
+        .status-np {{ background: #fde8eb; color: #a50f2f; }}
+        .empty {{ text-align: center; color: var(--slate); padding: 20px 8px; }}
+        .foot {{
+            border-top: 1px solid var(--border);
+            padding: 12px 18px 16px;
+            font-size: 11px;
+            color: var(--slate);
+            background: #fbfdff;
+        }}
+        @media print {{
+            @page {{ size: A4 portrait; margin: 10mm; }}
+            body {{ background: #fff; padding: 0; }}
+            .page {{ page-break-after: always; break-after: page; margin: 0; }}
+            .page.last-page {{ page-break-after: auto; break-after: auto; }}
+            .sheet {{ border: 0; box-shadow: none; max-width: none; }}
+            .hero {{ padding-top: 14px; padding-bottom: 14px; }}
+            h1 {{ font-size: 24px; }}
+            .subtitle {{ font-size: 12px; }}
+            .meta {{ padding-top: 10px; padding-bottom: 10px; }}
+            .appointments {{ break-inside: avoid; }}
+            table {{ break-inside: auto; }}
+            tr {{ break-inside: avoid; }}
+        }}
+    </style>
+</head>
+<body>
+    {''.join(pages_html)}
+</body>
+</html>
+"""
+
+
 @api_router.get("/training-plan/a4")
-async def training_plan_a4(month: str, staff: dict = Depends(require_privileged_staff)):
+async def training_plan_a4(month: str, format: Optional[str] = None, staff: dict = Depends(require_privileged_staff)):
     if not re.match(r"^\d{4}-\d{2}$", month or ""):
         raise HTTPException(status_code=400, detail="Month must be YYYY-MM")
     rows = await db.training_plan.find({
         "slot_date": {"$gte": f"{month}-01", "$lt": f"{month}-32"}
     }, {"_id": 0}).sort("slot_date", 1).to_list(500)
 
-    try:
-        from reportlab.lib.pagesizes import A4
-        from reportlab.pdfgen import canvas
-    except Exception:
-        raise HTTPException(status_code=500, detail="PDF export dependency missing")
-
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    w, h = A4
     app_doc = await _appointments_doc()
     v = app_doc.get("value", {})
     role_names = {}
@@ -1931,6 +3071,29 @@ async def training_plan_a4(month: str, staff: dict = Depends(require_privileged_
             continue
         u = await db.users.find_one({"id": uid}, {"_id": 0, "first_name": 1, "last_name": 1})
         role_names[k] = (f"{u.get('first_name','')} {u.get('last_name','')}".strip() if u else "TBC")
+
+    if (format or "").lower() == "html":
+        html_doc = _training_plan_html_document(month, rows, role_names)
+        return Response(
+            content=html_doc,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="training-plan-{month}.html"'},
+        )
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except Exception:
+        pdf = _simple_training_plan_pdf(month, rows, role_names)
+        return Response(
+            content=pdf,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="training-plan-{month}.pdf"'},
+        )
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
 
     y = h - 32
     c.setFillColorRGB(0.0, 0.18, 0.37)
@@ -2003,7 +3166,9 @@ def event_view(e: dict, user_id: str, staff: bool) -> dict:
         colour = "green" if ratio < 0.5 else ("amber" if ratio < 1.0 else "red")
     view = {
         "id": e["id"], "title": e["title"], "description": e.get("description", ""),
-        "location": e.get("location", ""), "start": e["start"], "end": e.get("end"),
+        "location": e.get("location", ""), "link_url": e.get("link_url", ""),
+        "attachment_ids": e.get("attachment_ids", []),
+        "start": e["start"], "end": e.get("end"),
         "capacity": cap, "event_type": e.get("event_type", "standard"),
         "participation": e.get("participation", "attend"),
         "points_value": int(e.get("points_value", 0)),
@@ -2018,9 +3183,51 @@ def event_view(e: dict, user_id: str, staff: bool) -> dict:
 
 @api_router.get("/events")
 async def list_events(user: dict = Depends(get_current_user)):
+    rows = await db.events.find({}, {"_id": 0}).sort("start", 1).to_list(3000)
     staff = user["role"] in STAFF_ROLES
-    events = await db.events.find({}, {"_id": 0}).sort("start", 1).to_list(2000)
-    return [event_view(e, user["id"], staff) for e in events]
+    return [event_view(e, user["id"], staff) for e in rows]
+
+
+@api_router.post("/events")
+async def create_event(payload: EventCreate, staff: dict = Depends(require_staff)):
+    e = {
+        "id": str(uuid.uuid4()),
+        "title": payload.title,
+        "description": payload.description,
+        "location": payload.location,
+        "link_url": (payload.link_url or DEFAULT_EVENT_LINK).strip(),
+        "attachment_ids": payload.attachment_ids or [],
+        "start": payload.start,
+        "end": payload.end,
+        "capacity": int(payload.capacity or 0),
+        "event_type": payload.event_type or "standard",
+        "participation": payload.participation or "attend",
+        "points_value": int(payload.points_value or 0),
+        "bids": [],
+        "attendees": [],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+        "created_by": staff["id"],
+    }
+    await db.events.insert_one(e)
+    return event_view(e, staff["id"], True)
+
+
+@api_router.patch("/events/{event_id}")
+async def update_event(event_id: str, payload: EventUpdate, staff: dict = Depends(require_staff)):
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    if "capacity" in updates:
+        updates["capacity"] = int(updates["capacity"] or 0)
+    if "points_value" in updates:
+        updates["points_value"] = int(updates["points_value"] or 0)
+    updates["updated_at"] = now_iso()
+    e = await db.events.find_one_and_update(
+        {"id": event_id}, {"$set": updates}, projection={"_id": 0}, return_document=True)
+    if not e:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event_view(e, staff["id"], True)
 
 
 @api_router.get("/events/{event_id}")
@@ -2029,33 +3236,7 @@ async def get_event(event_id: str, user: dict = Depends(get_current_user)):
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
     staff = user["role"] in STAFF_ROLES
-    view = event_view(e, user["id"], staff)
-    if staff:
-        bidders = await db.users.find({"id": {"$in": e.get("bids", [])}},
-                                      {"_id": 0, "password_hash": 0}).to_list(500)
-        view["bidders"] = [public_user(b) for b in bidders]
-    return view
-
-
-@api_router.post("/events")
-async def create_event(payload: EventCreate, staff: dict = Depends(require_staff)):
-    event = payload.model_dump()
-    event.update({"id": str(uuid.uuid4()), "bids": [], "attendees": [],
-                  "created_by": staff["id"], "created_at": now_iso()})
-    await db.events.insert_one(event)
-    return event_view(event, staff["id"], True)
-
-
-@api_router.patch("/events/{event_id}")
-async def update_event(event_id: str, payload: EventUpdate, staff: dict = Depends(require_staff)):
-    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    e = await db.events.find_one_and_update({"id": event_id}, {"$set": updates},
-                                            projection={"_id": 0}, return_document=True)
-    if not e:
-        raise HTTPException(status_code=404, detail="Event not found")
-    return event_view(e, staff["id"], True)
+    return await _event_detail_view(e, user["id"], staff)
 
 
 @api_router.delete("/events/{event_id}")
@@ -2810,6 +3991,17 @@ async def export_dofe_diary(cadet_id: Optional[str] = None, user: dict = Depends
         if not cadet_id:
             raise HTTPException(status_code=400, detail="cadet_id required for staff access")
         cid = cadet_id
+    elif user["role"] == "parent":
+        linked = user.get("child_ids", []) or []
+        if cadet_id:
+            if cadet_id not in linked:
+                raise HTTPException(status_code=403, detail="Forbidden")
+            cid = cadet_id
+        else:
+            if len(linked) == 1:
+                cid = linked[0]
+            else:
+                raise HTTPException(status_code=400, detail="cadet_id required for parent access")
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
     cadet = await db.users.find_one({"id": cid}, {"_id": 0})
@@ -2889,6 +4081,17 @@ async def get_dofe_diary(cadet_id: Optional[str] = None, user: dict = Depends(ge
         if not cadet_id:
             raise HTTPException(status_code=400, detail="cadet_id required for staff access")
         cid = cadet_id
+    elif user["role"] == "parent":
+        linked = user.get("child_ids", []) or []
+        if cadet_id:
+            if cadet_id not in linked:
+                raise HTTPException(status_code=403, detail="Forbidden")
+            cid = cadet_id
+        else:
+            if len(linked) == 1:
+                cid = linked[0]
+            else:
+                raise HTTPException(status_code=400, detail="cadet_id required for parent access")
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
     entries = await db.dofe_diary.find({"cadet_id": cid}, {"_id": 0}).sort("week_date", -1).to_list(500)
@@ -2963,8 +4166,17 @@ async def download_dofe_diary_file(file_id: str, user: dict = Depends(get_curren
     if not fdoc:
         raise HTTPException(status_code=404, detail="File not found")
     entry = await db.dofe_diary.find_one({"id": fdoc["entry_id"]}, {"_id": 0, "cadet_id": 1})
-    if entry and entry["cadet_id"] != user["id"] and user["role"] not in ("admin", "cfav"):
-        raise HTTPException(status_code=403, detail="Forbidden")
+    if entry:
+        if user["role"] == "cadet" and entry["cadet_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        elif user["role"] in ("admin", "cfav"):
+            pass
+        elif user["role"] == "parent":
+            linked = user.get("child_ids", []) or []
+            if entry["cadet_id"] not in linked:
+                raise HTTPException(status_code=403, detail="Forbidden")
+        else:
+            raise HTTPException(status_code=403, detail="Forbidden")
     stream = await fs.open_download_stream(ObjectId(fdoc["gridfs_id"]))
     data = await stream.read()
     return Response(content=data, media_type=fdoc["content_type"],
@@ -3370,6 +4582,8 @@ async def seed_users():
             await db.users.insert_one({
                 "id": uid, "email": d["email"], "password_hash": hash_password(d["password"]),
                 "role": d["role"], "first_name": d["first_name"], "last_name": d["last_name"],
+                "login_username": await ensure_login_username(d["first_name"], d["last_name"]),
+                "must_change_password": d["role"] == "cadet",
                 "is_uniformed": True if d["role"] == "cfav" else None,
                 "child_ids": [], "bonus_points": 0, "created_at": now_iso()})
             ids[d["role"]] = uid
@@ -3379,6 +4593,11 @@ async def seed_users():
             if not verify_password(d["password"], existing["password_hash"]):
                 await db.users.update_one({"email": d["email"]},
                                           {"$set": {"password_hash": hash_password(d["password"])}})
+            if not existing.get("login_username"):
+                await db.users.update_one(
+                    {"email": d["email"]},
+                    {"$set": {"login_username": await ensure_login_username(d["first_name"], d["last_name"], existing.get("id"))}},
+                )
             ids[d["role"]] = existing["id"]
     # Link demo parent to demo cadet
     if ids.get("parent") and ids.get("cadet"):
@@ -3394,17 +4613,31 @@ async def seed_users():
             "created_by": "Squadron Admin", "created_at": now_iso()})
 
 
+async def ensure_usernames_backfilled():
+    missing = await db.users.find(
+        {"$or": [{"login_username": {"$exists": False}}, {"login_username": ""}]},
+        {"_id": 0, "id": 1, "first_name": 1, "last_name": 1},
+    ).to_list(5000)
+    for u in missing:
+        username = await ensure_login_username(u.get("first_name", ""), u.get("last_name", ""), u.get("id"))
+        await db.users.update_one({"id": u["id"]}, {"$set": {"login_username": username}})
+
+
 @app.on_event("startup")
 async def on_startup():
     global _progression_task
     await db.users.create_index("email", unique=True)
     await db.users.create_index("id", unique=True)
+    await db.users.create_index("login_username", unique=True, sparse=True)
     await db.users.create_index([("role", 1), ("is_uniformed", 1)])
     await db.events.create_index("start")
     await db.notice_acks.create_index([("notice_id", 1), ("user_id", 1)], unique=True)
     await db.messages.create_index("member_id")
     await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await db.documents.create_index([("visible_roles", 1), ("created_at", -1)])
+    await db.learning_assignments.create_index([("cadet_ids", 1), ("created_at", -1)])
+    await db.learning_submissions.create_index([("assignment_id", 1), ("cadet_id", 1)], unique=True)
+    await db.learning_submissions.create_index([("cadet_id", 1), ("submitted_at", -1)])
     await db.push_subscriptions.create_index("endpoint", unique=True)
     await db.cadet_tracker.create_index("tracker_key", unique=True)
     await db.cadet_tracker.create_index("user_id")
@@ -3413,6 +4646,7 @@ async def on_startup():
     await db.cfav_event_ideas.create_index([("parade_date", 1), ("created_at", -1)])
     await db.cfav_skill_matrix.create_index("cfav_id", unique=True)
     await seed_users()
+    await ensure_usernames_backfilled()
     _progression_task = asyncio.create_task(_progression_alert_loop())
 
 

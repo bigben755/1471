@@ -31,6 +31,16 @@ export const PortalShell = ({ tabs, active, onTab, children }) => {
               <span className={`hidden sm:inline-block text-[10px] uppercase tracking-wide px-2.5 py-1 ${ROLE_BADGE[user?.role]}`}>
                 {roleText}
               </span>
+              {user?.role === "cadet" && (
+                <a href="https://cadets.bader.mod.uk/" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-xs text-raf-sky hover:text-white">
+                  <ExternalLink size={14} /> Cadet Portal
+                </a>
+              )}
+              {user?.role === "cfav" && (
+                <a href="https://sms.bader.mod.uk/" target="_blank" rel="noreferrer" className="hidden md:flex items-center gap-1 text-xs text-raf-sky hover:text-white">
+                  <ExternalLink size={14} /> SMS
+                </a>
+              )}
               <a href="/" className="hidden md:flex items-center gap-1 text-xs text-raf-sky hover:text-white">
                 <ExternalLink size={14} /> Website
               </a>

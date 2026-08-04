@@ -12,7 +12,7 @@ import {
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 const imgUrl = (u) => u && u.startsWith("/api") ? `${BASE_URL}${u}` : u;
 const inp = "w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm";
-const empty = { title: "", excerpt: "", body: "", cover_image_url: "", images: [], status: "draft" };
+const empty = { title: "", excerpt: "", body: "", cover_image_url: "", images: [], facebook_post_url: "", status: "draft" };
 
 export const BlogAdminPanel = () => {
   const [posts, setPosts] = useState([]);
@@ -85,7 +85,7 @@ export const BlogAdminPanel = () => {
               </div>
               <div className="flex items-center gap-2">
                 {p.status === "published" && <a data-testid={`post-view-${p.id}`} href={`/news/${p.slug}`} target="_blank" rel="noreferrer" className="p-2 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors" title="View"><Eye size={15} /></a>}
-                <button data-testid={`post-edit-${p.id}`} onClick={() => setEdit({ id: p.id, title: p.title, excerpt: p.excerpt || "", body: p.body, cover_image_url: p.cover_image_url || "", images: p.images || [], status: p.status })} className="p-2 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors" title="Edit"><Pencil size={15} /></button>
+                <button data-testid={`post-edit-${p.id}`} onClick={() => setEdit({ id: p.id, title: p.title, excerpt: p.excerpt || "", body: p.body, cover_image_url: p.cover_image_url || "", images: p.images || [], facebook_post_url: p.facebook_post_url || "", status: p.status })} className="p-2 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors" title="Edit"><Pencil size={15} /></button>
                 <button data-testid={`post-delete-${p.id}`} onClick={() => remove(p.id)} className="p-2 bg-red-50 text-raf-red hover:bg-raf-red hover:text-white transition-colors" title="Delete"><Trash2 size={15} /></button>
               </div>
             </div>
@@ -100,6 +100,7 @@ export const BlogAdminPanel = () => {
             <div className="space-y-3">
               <input data-testid="post-title" className={inp} placeholder="Post title" value={edit.title} onChange={(e) => setEdit({ ...edit, title: e.target.value })} />
               <textarea data-testid="post-excerpt" className={inp} rows={2} placeholder="Short summary (shown on cards)" value={edit.excerpt} onChange={(e) => setEdit({ ...edit, excerpt: e.target.value })} />
+              <input data-testid="post-facebook-link" className={inp} placeholder="Facebook post link (optional)" value={edit.facebook_post_url || ""} onChange={(e) => setEdit({ ...edit, facebook_post_url: e.target.value })} />
               <textarea data-testid="post-body" className={inp} rows={8} placeholder="Write your story... (blank line = new paragraph)" value={edit.body} onChange={(e) => setEdit({ ...edit, body: e.target.value })} />
 
               <div>

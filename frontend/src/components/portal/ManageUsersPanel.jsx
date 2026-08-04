@@ -1,15 +1,35 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api, ROLE_LABELS } from "../../api";
 import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
 import { UserFormDialog } from "./UserFormDialog";
-import { Plus, Loader2, KeyRound, Trash2, Pencil, Check, X } from "lucide-react";
+import { Plus, Loader2, KeyRound, Trash2, Pencil, Check, X, Upload } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 const ROLE_BADGE = {
   admin: "bg-raf-red text-white", cfav: "bg-raf-red/80 text-white",
   cadet: "bg-emerald-600 text-white", parent: "bg-raf-blue text-white",
 };
+
+const APPOINTMENT_FIELDS = [
+  ["training_officer", "Training Officer"],
+  ["adjutant", "Adjutant"],
+  ["stores_officer", "Stores Officer"],
+  ["community_officer", "Community Officer"],
+  ["health_safety_officer", "Health & Safety Officer"],
+  ["shooting_officer", "Shooting Officer"],
+  ["stem_officer", "STEM Officer"],
+  ["oc", "OC"],
+  ["deputy_oc", "Deputy OC"],
+  ["leadership_officer", "Leadership Officer"],
+  ["sports_officer", "Sports Officer"],
+  ["sqn_wo", "Sqn WO"],
+  ["dofe_officer", "DofE Officer"],
+  ["adventure_training_officer", "Adventure Training Officer"],
+  ["fieldcraft_officer", "Fieldcraft Officer"],
+  ["cyber_officer", "Cyber Officer"],
+  ["space_officer", "Space Officer"],
+];
 
 export const ManageUsersPanel = () => {
   const { user } = useAuth();
@@ -20,12 +40,28 @@ export const ManageUsersPanel = () => {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [bonusEdit, setBonusEdit] = useState({});
+  const [importRoleHint, setImportRoleHint] = useState("cadet");
+  const [importResult, setImportResult] = useState(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const importRef = useRef(null);
   const [appointments, setAppointments] = useState({
     training_officer: "",
     adjutant: "",
     stores_officer: "",
     community_officer: "",
     health_safety_officer: "",
+    shooting_officer: "",
+    stem_officer: "",
+    oc: "",
+    deputy_oc: "",
+    leadership_officer: "",
+    sports_officer: "",
+    sqn_wo: "",
+    dofe_officer: "",
+    adventure_training_officer: "",
+    fieldcraft_officer: "",
+    cyber_officer: "",
+    space_officer: "",
   });
 
   const load = useCallback(async () => {
@@ -40,6 +76,18 @@ export const ManageUsersPanel = () => {
           stores_officer: a.stores_officer?.id || "",
           community_officer: a.community_officer?.id || "",
           health_safety_officer: a.health_safety_officer?.id || "",
+          shooting_officer: a.shooting_officer?.id || "",
+          stem_officer: a.stem_officer?.id || "",
+          oc: a.oc?.id || "",
+          deputy_oc: a.deputy_oc?.id || "",
+          leadership_officer: a.leadership_officer?.id || "",
+          sports_officer: a.sports_officer?.id || "",
+          sqn_wo: a.sqn_wo?.id || "",
+          dofe_officer: a.dofe_officer?.id || "",
+          adventure_training_officer: a.adventure_training_officer?.id || "",
+          fieldcraft_officer: a.fieldcraft_officer?.id || "",
+          cyber_officer: a.cyber_officer?.id || "",
+          space_officer: a.space_officer?.id || "",
         });
       }
     }
@@ -48,6 +96,21 @@ export const ManageUsersPanel = () => {
   useEffect(() => { load(); }, [load]);
 
   const resetPw = async (u) => {
+    if (u.role === "cadet") {
+      const ok = window.confirm(
+        `Reset ${u.first_name} ${u.last_name} to the standard cadet password (Squadron123!)?`,
+      );
+      if (!ok) return;
+      try {
+        await api.post(`/users/${u.id}/reset-cadet-password`);
+        toast.success("Cadet password reset to Squadron123!", {
+          description: "Cadet must change this password after signing in.",
+        });
+      } catch (err) {
+        toast.error(err.response?.data?.detail || "Could not reset cadet password.");
+      }
+      return;
+    }
     const pw = window.prompt(`Set a new password for ${u.first_name} ${u.last_name}:`);
     if (!pw) return;
     if (pw.length < 6) { toast.error("Password must be at least 6 characters."); return; }
@@ -90,6 +153,66 @@ export const ManageUsersPanel = () => {
     }
   };
 
+  const uploadBulk = async (file) => {
+    if (!file) return;
+    setImportBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("role_hint", importRoleHint);
+      const { data } = await api.post("/users/import-upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setImportResult(data);
+      toast.success(`${data.created} account(s) created.`, {
+        description: `${data.skipped} skipped, ${data.errors} with issues.`,
+      });
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not import members.");
+    } finally {
+      setImportBusy(false);
+      if (importRef.current) importRef.current.value = "";
+    }
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadTemplate = async (format) => {
+    try {
+      const { data } = await api.get("/users/import-template", {
+        params: { format, role: importRoleHint },
+        responseType: "blob",
+      });
+      downloadBlob(data, `member-import-template-${importRoleHint}.${format === "xlsx" ? "xlsx" : "docx"}`);
+      toast.success("Template downloaded.");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not download template.");
+    }
+  };
+
+  const downloadQr = async () => {
+    try {
+      const { data } = await api.get("/users/register-qr", {
+        params: { role: importRoleHint },
+        responseType: "blob",
+      });
+      downloadBlob(data, `register-${importRoleHint}-qr.png`);
+      toast.success("QR code downloaded.");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not download QR code.");
+    }
+  };
+
   return (
     <div>
       <PanelHeading
@@ -102,6 +225,71 @@ export const ManageUsersPanel = () => {
         )}
       />
 
+      <div className="bg-white border border-white p-4 mb-5" data-testid="bulk-register-panel">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs text-raf-slate">Role hint</label>
+            <select
+              value={importRoleHint}
+              onChange={(e) => setImportRoleHint(e.target.value)}
+              className="block border border-raf-sky px-3 py-2 text-sm outline-none focus:border-raf-blue"
+            >
+              <option value="cadet">Cadet</option>
+              <option value="cfav">CFAV</option>
+            </select>
+          </div>
+
+          <input
+            ref={importRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.docx"
+            className="hidden"
+            onChange={(e) => uploadBulk(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            disabled={importBusy}
+            onClick={() => importRef.current?.click()}
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-blue text-raf-blue hover:bg-raf-blue hover:text-white transition-colors disabled:opacity-60"
+          >
+            {importBusy ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />} Import Excel/CSV/Word
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadTemplate("xlsx")}
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-sky text-raf-navy hover:border-raf-blue transition-colors"
+          >
+            Download Excel template
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadTemplate("docx")}
+            className="inline-flex items-center gap-2 px-4 py-2.5 border border-raf-sky text-raf-navy hover:border-raf-blue transition-colors"
+          >
+            Download Word template
+          </button>
+          <button
+            type="button"
+            onClick={downloadQr}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-raf-red text-white hover:bg-[#A00926] transition-colors"
+          >
+            Download {importRoleHint.toUpperCase()} QR
+          </button>
+        </div>
+        <p className="text-xs text-raf-slate mt-2">
+          Upload .xlsx, .xls, .csv or .docx containing first name, surname, and optional role/email/uniformed columns.
+        </p>
+        {importResult && (
+          <div className="mt-3 text-xs text-raf-slate">
+            Created: <strong className="text-raf-navy">{importResult.created}</strong>
+            {" · "}
+            Skipped: <strong className="text-raf-navy">{importResult.skipped}</strong>
+            {" · "}
+            Errors: <strong className="text-raf-navy">{importResult.errors}</strong>
+          </div>
+        )}
+      </div>
+
       <div className="flex gap-2 mb-5 flex-wrap">
         {["all", "cadet", "parent", "cfav", "cfav_uniformed", "cfav_non_uniformed", "admin"].map((r) => (
           <button key={r} data-testid={`user-filter-${r}`} onClick={() => setFilter(r)} className={`px-4 py-2 text-sm capitalize transition-colors ${filter === r ? "bg-raf-blue text-white" : "bg-white text-raf-slate hover:text-raf-blue"}`}>
@@ -113,14 +301,8 @@ export const ManageUsersPanel = () => {
       {isAdmin && (
         <div className="bg-white border border-white p-4 mb-5" data-testid="appointments-panel">
           <h3 className="font-display font-bold text-raf-navy mb-3">Officer appointments</h3>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[
-              ["training_officer", "Training Officer"],
-              ["adjutant", "Adjutant"],
-              ["stores_officer", "Stores Officer"],
-              ["community_officer", "Community Officer"],
-              ["health_safety_officer", "Health & Safety Officer"],
-            ].map(([k, label]) => (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+            {APPOINTMENT_FIELDS.map(([k, label]) => (
               <div key={k}>
                 <label className="text-xs text-raf-slate">{label}</label>
                 <select className="w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm" value={appointments[k]} onChange={(e) => setAppointments((a) => ({ ...a, [k]: e.target.value }))}>
@@ -154,7 +336,11 @@ export const ManageUsersPanel = () => {
                     DofE: <strong className="text-raf-navy">{u.dofe_level || "-"} {u.dofe_status ? `(${u.dofe_status})` : ""}</strong>
                     {" · "}
                     BTech: <strong className="text-raf-navy">{u.btech_pathway || "-"} {u.btech_status ? `(${u.btech_status})` : ""}</strong>
+                    <span className="ml-2">Last login: <strong className="text-raf-navy">{u.last_login_at ? new Date(u.last_login_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Never"}</strong></span>
                   </div>
+                )}
+                {u.role !== "cadet" && u.last_login_at && (
+                  <div className="text-xs text-raf-slate mt-1">Last login: <strong className="text-raf-navy">{new Date(u.last_login_at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</strong></div>
                 )}
               </div>
 
@@ -174,8 +360,15 @@ export const ManageUsersPanel = () => {
                   </div>
                 )}
                 <button data-testid={`edit-user-${u.id}`} onClick={() => { setEditing(u); setFormOpen(true); }} className="p-2 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors" title="Edit"><Pencil size={15} /></button>
-                <button data-testid={`reset-pw-${u.id}`} onClick={() => resetPw(u)} className="p-2 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white transition-colors" title="Reset password"><KeyRound size={15} /></button>
-                {u.role !== "admin" && <button data-testid={`delete-user-${u.id}`} onClick={() => remove(u)} className="p-2 bg-red-50 text-raf-red hover:bg-raf-red hover:text-white transition-colors" title="Delete"><Trash2 size={15} /></button>}
+                <button
+                  data-testid={`reset-pw-${u.id}`}
+                  onClick={() => resetPw(u)}
+                  className="p-2 bg-amber-50 text-amber-700 hover:bg-amber-500 hover:text-white transition-colors"
+                  title={u.role === "cadet" ? "Reset to Squadron123!" : "Reset password"}
+                >
+                  <KeyRound size={15} />
+                </button>
+                <button data-testid={`delete-user-${u.id}`} onClick={() => remove(u)} className="p-2 bg-red-50 text-raf-red hover:bg-raf-red hover:text-white transition-colors" title="Delete"><Trash2 size={15} /></button>
               </div>
             </div>
           ))}

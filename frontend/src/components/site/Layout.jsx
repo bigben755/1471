@@ -4,12 +4,13 @@ import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { LINKS } from "../../data/content";
 import { api, getToken } from "../../api";
-import { applyPageOverrides } from "../../lib/siteCmsDom";
+import { applyPageOverrides, extractPageEditableNodes } from "../../lib/siteCmsDom";
 import { SiteQuickEditDrawer } from "./SiteQuickEditDrawer";
 import { Check, Loader2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 const EMPTY_OVERRIDES = { texts: {}, images: {} };
+const INLINE_EDIT_FLAG = "data-cms-inline-edit";
 
 function normalize(overrides) {
   return {
@@ -62,12 +63,13 @@ function OrgSchema() {
 }
 
 export const Layout = () => {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const siteRef = useRef(null);
   const [savedByPath, setSavedByPath] = useState({});
   const [draftByPath, setDraftByPath] = useState({});
   const [sessionStartByPath, setSessionStartByPath] = useState({});
   const [canEdit, setCanEdit] = useState(false);
+  const [editorEnabled, setEditorEnabled] = useState(false);
   const [editSessionActive, setEditSessionActive] = useState(false);
   const [saving, setSaving] = useState(false);
   const [undoing, setUndoing] = useState(false);
@@ -93,20 +95,34 @@ export const Layout = () => {
   useEffect(() => {
     if (!getToken()) {
       setCanEdit(false);
+      setEditorEnabled(false);
       return;
     }
     let live = true;
     api.get("/auth/me")
       .then(({ data }) => {
         if (!live) return;
-        setCanEdit(data?.role === "admin");
+        const isAdmin = data?.role === "admin";
+        setCanEdit(isAdmin);
+        if (!isAdmin) {
+          setEditorEnabled(false);
+          setEditSessionActive(false);
+          return;
+        }
+
+        const params = new URLSearchParams(search);
+        const launched = params.get("cms_editor") === "1";
+        setEditorEnabled(launched);
+        setEditSessionActive(launched);
       })
       .catch(() => {
         if (!live) return;
         setCanEdit(false);
+        setEditorEnabled(false);
+        setEditSessionActive(false);
       });
     return () => { live = false; };
-  }, []);
+  }, [search]);
 
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
@@ -132,6 +148,24 @@ export const Layout = () => {
         next[path] = normalizedDraft;
       }
       return next;
+    });
+  };
+
+  const upsertTextDraft = (key, value) => {
+    const baseline = savedByPath[pathname] || EMPTY_OVERRIDES;
+    const active = normalize(draftByPath[pathname] || baseline);
+    onDraftChange(pathname, {
+      texts: { ...active.texts, [key]: value },
+      images: { ...active.images },
+    });
+  };
+
+  const upsertImageDraft = (key, src, alt) => {
+    const baseline = savedByPath[pathname] || EMPTY_OVERRIDES;
+    const active = normalize(draftByPath[pathname] || baseline);
+    onDraftChange(pathname, {
+      texts: { ...active.texts },
+      images: { ...active.images, [key]: { src: src || "", alt: alt || "" } },
     });
   };
 
@@ -214,6 +248,91 @@ export const Layout = () => {
     }
   };
 
+  useEffect(() => {
+    if (!canEdit || !editorEnabled || !editSessionActive) return;
+    const root = siteRef.current?.querySelector("main");
+    if (!root) return;
+
+    const { texts, images } = extractPageEditableNodes(root);
+    const cleanupFns = [];
+    const parentMap = new Map();
+
+    texts.forEach((entry) => {
+      const p = entry.parent;
+      if (!p || !p.isConnected) return;
+      const list = parentMap.get(p) || [];
+      list.push(entry);
+      parentMap.set(p, list);
+    });
+
+    // Inline-edit only elements with a single text entry to avoid clobbering mixed content.
+    parentMap.forEach((entries, parent) => {
+      if (entries.length !== 1) return;
+      const [entry] = entries;
+      if (!entry?.key) return;
+      if (parent.closest(`[${INLINE_EDIT_FLAG}="controls"]`)) return;
+      const originalText = parent.textContent || "";
+      parent.setAttribute(INLINE_EDIT_FLAG, "text");
+      parent.setAttribute("contenteditable", "plaintext-only");
+      parent.style.outline = "1px dashed rgba(0, 82, 155, 0.35)";
+      parent.style.outlineOffset = "2px";
+      parent.title = "Edit text directly";
+
+      const onFocus = () => {
+        parent.style.outline = "2px solid rgba(0, 82, 155, 0.75)";
+      };
+      const onBlur = () => {
+        parent.style.outline = "1px dashed rgba(0, 82, 155, 0.35)";
+        const nextText = parent.textContent || "";
+        if (nextText !== originalText) upsertTextDraft(entry.key, nextText);
+      };
+      parent.addEventListener("focus", onFocus);
+      parent.addEventListener("blur", onBlur);
+      cleanupFns.push(() => {
+        parent.removeEventListener("focus", onFocus);
+        parent.removeEventListener("blur", onBlur);
+        parent.removeAttribute("contenteditable");
+        parent.removeAttribute(INLINE_EDIT_FLAG);
+        parent.style.outline = "";
+        parent.style.outlineOffset = "";
+        parent.title = "";
+      });
+    });
+
+    images.forEach((img) => {
+      if (!img?.el || !img.key) return;
+      const el = img.el;
+      el.setAttribute(INLINE_EDIT_FLAG, "image");
+      el.style.outline = "1px dashed rgba(198, 12, 48, 0.45)";
+      el.style.outlineOffset = "2px";
+      el.style.cursor = "pointer";
+      el.title = "Click to replace image URL";
+      const onClick = (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const currentSrc = el.getAttribute("src") || "";
+        const nextSrc = window.prompt("Replace image URL", currentSrc);
+        if (nextSrc === null) return;
+        const currentAlt = el.getAttribute("alt") || "";
+        const nextAlt = window.prompt("Image alt text", currentAlt);
+        if (nextAlt === null) return;
+        upsertImageDraft(img.key, nextSrc, nextAlt);
+        toast.success("Image placeholder updated for this page.");
+      };
+      el.addEventListener("click", onClick);
+      cleanupFns.push(() => {
+        el.removeEventListener("click", onClick);
+        el.removeAttribute(INLINE_EDIT_FLAG);
+        el.style.outline = "";
+        el.style.outlineOffset = "";
+        el.style.cursor = "";
+        el.title = "";
+      });
+    });
+
+    return () => cleanupFns.forEach((fn) => fn());
+  }, [canEdit, editorEnabled, editSessionActive, pathname, savedByPath, draftByPath]);
+
   return (
     <div ref={siteRef}>
       <ScrollToTop />
@@ -221,9 +340,10 @@ export const Layout = () => {
       <Header />
 
       {/* Admin website editing controls */}
-      {canEdit && (
+      {canEdit && editorEnabled && (
         <div
           data-cms-ignore="true"
+          data-cms-inline-edit="controls"
           className="fixed right-3 top-[78px] z-[130] flex flex-col items-end gap-2"
         >
           <button
@@ -267,6 +387,9 @@ export const Layout = () => {
               <div className="px-2 text-[10px] font-semibold text-white/80 bg-raf-navy/80 rounded-full">
                 {stagedPages.length} staged {stagedPages.length === 1 ? "page" : "pages"}
               </div>
+              <div className="max-w-[180px] px-2 py-1 text-[10px] leading-tight text-white/85 bg-raf-blue/90 rounded">
+                Click text to edit directly. Click images to replace in place.
+              </div>
             </>
           )}
         </div>
@@ -275,9 +398,9 @@ export const Layout = () => {
       <main>
         <Outlet />
       </main>
-      <Footer canEdit={canEdit} editOpen={editSessionActive} onEditToggle={() => (editSessionActive ? stopEditing() : startEditing())} />
+      <Footer />
       <SiteQuickEditDrawer
-        open={canEdit && editSessionActive}
+        open={canEdit && editorEnabled && editSessionActive}
         path={pathname}
         rootRef={siteRef}
         onClose={stopEditing}

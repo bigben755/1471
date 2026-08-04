@@ -13,12 +13,14 @@ const MODES = [
   { key: "all", label: "Everyone" },
   { key: "roles", label: "By role" },
   { key: "users", label: "Specific people" },
+  { key: "appointments", label: "By post holder" },
   { key: "parent_of", label: "A cadet's parent" },
 ];
 
-export const RecipientPicker = ({ value, onChange, users }) => {
+export const RecipientPicker = ({ value, onChange, users, appointmentOptions = [] }) => {
   const [q, setQ] = useState("");
   const set = (patch) => onChange({ ...value, ...patch });
+  const appointmentKeys = value.appointment_keys || [];
   const cadets = users.filter((u) => u.role === "cadet");
   const filtered = users.filter((u) =>
     `${u.first_name} ${u.last_name} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
@@ -27,6 +29,10 @@ export const RecipientPicker = ({ value, onChange, users }) => {
     set({ roles: value.roles.includes(r) ? value.roles.filter((x) => x !== r) : [...value.roles, r] });
   const toggleUser = (id) =>
     set({ user_ids: value.user_ids.includes(id) ? value.user_ids.filter((x) => x !== id) : [...value.user_ids, id] });
+  const toggleAppointment = (k) =>
+    set({ appointment_keys: appointmentKeys.includes(k)
+      ? appointmentKeys.filter((x) => x !== k)
+      : [...appointmentKeys, k] });
 
   return (
     <div data-testid="recipient-picker">
@@ -90,6 +96,26 @@ export const RecipientPicker = ({ value, onChange, users }) => {
         </div>
       )}
 
+      {value.mode === "appointments" && (
+        <div className="mt-3">
+          <p className="text-xs text-raf-slate mb-2">Send directly to selected appointment holders (ideal for Adjutant dissemination).</p>
+          <div className="flex flex-wrap gap-2">
+            {appointmentOptions.map((a) => (
+              <button
+                key={a.key}
+                type="button"
+                data-testid={`recipient-appointment-${a.key}`}
+                onClick={() => toggleAppointment(a.key)}
+                className={`px-3 py-1.5 text-sm border transition-colors ${appointmentKeys.includes(a.key) ? "bg-raf-red text-white border-raf-red" : "bg-white text-raf-slate border-raf-sky"}`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-raf-slate">{appointmentKeys.length} post holder role(s) selected.</p>
+        </div>
+      )}
+
       {value.mode === "parent_of" && (
         <div className="mt-3">
           <label className="block text-xs text-raf-slate mb-1">Select the cadet — the message goes to their linked parent/carer.</label>
@@ -111,12 +137,13 @@ export const RecipientPicker = ({ value, onChange, users }) => {
   );
 };
 
-export const emptyAudience = () => ({ mode: "all", roles: [], user_ids: [], cadet_id: null });
+export const emptyAudience = () => ({ mode: "all", roles: [], user_ids: [], cadet_id: null, appointment_keys: [] });
 
 export const audienceValid = (a) => {
   if (a.mode === "all") return true;
   if (a.mode === "roles") return a.roles.length > 0;
   if (a.mode === "users") return a.user_ids.length > 0;
+  if (a.mode === "appointments") return a.appointment_keys.length > 0;
   if (a.mode === "parent_of") return !!a.cadet_id;
   return false;
 };

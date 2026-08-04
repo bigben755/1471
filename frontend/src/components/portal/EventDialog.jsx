@@ -5,15 +5,28 @@ import { useAuth } from "../../context/AuthContext";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "../ui/dialog";
-import { MapPin, Calendar as CalIcon, Users, Star, Award, Loader2, Check } from "lucide-react";
+import { MapPin, Calendar as CalIcon, Users, Star, Award, Loader2, Check, Link as LinkIcon, FileText, ExternalLink } from "lucide-react";
 
 const fmt = (iso) => new Date(iso).toLocaleString("en-GB", {
   weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
 });
 
+const fmtRange = (startIso, endIso) => {
+  if (!endIso) return fmt(startIso);
+  const start = new Date(startIso);
+  const end = new Date(endIso);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return fmt(startIso);
+  const sameDate = start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth() && start.getDate() === end.getDate();
+  if (sameDate) {
+    return `${fmt(startIso)} - ${end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  }
+  return `${fmt(startIso)} - ${fmt(endIso)}`;
+};
+
 export const EventDialog = ({ event, open, onClose, onChanged }) => {
   const { user, refresh } = useAuth();
   const staff = user?.role === "admin" || user?.role === "cfav";
+  const cadetOrParent = user?.role === "cadet" || user?.role === "parent";
   const [detail, setDetail] = useState(event);
   const [busy, setBusy] = useState(false);
   const [attendance, setAttendance] = useState([]);
@@ -75,8 +88,31 @@ export const EventDialog = ({ event, open, onClose, onChanged }) => {
         </DialogHeader>
 
         <div className="space-y-3 text-sm text-raf-slate">
-          <div className="flex items-center gap-2"><CalIcon size={16} className="text-raf-blue" /> {fmt(detail.start)}</div>
+          <div className="flex items-center gap-2"><CalIcon size={16} className="text-raf-blue" /> {fmtRange(detail.start, detail.end)}</div>
           {detail.location && <div className="flex items-center gap-2"><MapPin size={16} className="text-raf-blue" /> {detail.location}</div>}
+          {cadetOrParent && (
+            <div className="bg-raf-sky/30 border border-raf-sky p-3 text-sm text-raf-navy">
+              <p className="font-semibold mb-1">To sign up to this event, open Cadet Portal.</p>
+              <button
+                onClick={() => window.open(detail.link_url || "https://cadets.bader.mod.uk/", "_blank", "noopener,noreferrer")}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-raf-blue text-white hover:bg-raf-navy transition-colors"
+              >
+                <ExternalLink size={14} /> Open Cadet Portal
+              </button>
+            </div>
+          )}
+          {Array.isArray(detail.attachments) && detail.attachments.length > 0 && (
+            <div>
+              <div className="font-semibold text-raf-navy mb-2 flex items-center gap-2"><FileText size={15} className="text-raf-blue" /> Event documents</div>
+              <div className="space-y-2">
+                {detail.attachments.map((a) => (
+                  <a key={a.id} href={`${process.env.REACT_APP_BACKEND_URL}/api/attachments/${a.id}/download`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-raf-blue hover:underline">
+                    <LinkIcon size={14} /> {a.filename}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2"><Award size={16} className="text-raf-blue" /> {detail.points_value} points &middot; {detail.participation === "volunteer" ? "Volunteer event (builds streak)" : "Attendance event"}</div>
           {detail.description && <p className="leading-relaxed pt-1">{detail.description}</p>}
         </div>
@@ -93,17 +129,13 @@ export const EventDialog = ({ event, open, onClose, onChanged }) => {
           )}
         </div>
 
-        {user?.role === "cadet" && (
+        {cadetOrParent && (
           <button
-            data-testid="event-bid-button"
-            onClick={bid}
-            disabled={busy || (!detail.my_bid && detail.colour === "red")}
-            className={`mt-5 w-full inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold transition-colors disabled:opacity-50 ${
-              detail.my_bid ? "bg-white border-2 border-raf-red text-raf-red hover:bg-raf-red hover:text-white" : "bg-raf-red text-white hover:bg-[#A00926]"
-            }`}
+            data-testid="event-signup-button"
+            onClick={() => window.open(detail.link_url || "https://cadets.bader.mod.uk/", "_blank", "noopener,noreferrer")}
+            className="mt-5 w-full inline-flex items-center justify-center gap-2 px-6 py-3 font-semibold bg-raf-red text-white hover:bg-[#A00926] transition-colors"
           >
-            {busy && <Loader2 className="animate-spin" size={16} />}
-            {detail.my_bid ? "Withdraw my bid" : detail.colour === "red" ? "Event full" : "Bid for a place"}
+            <ExternalLink size={16} /> Open Cadet Portal to sign up
           </button>
         )}
 

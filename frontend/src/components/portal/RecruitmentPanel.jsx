@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "../ui/dialog";
 import {
-  Loader2, Mail, Phone, UserPlus, Clock, CheckCircle2, CalendarClock, Send, MailCheck, Paperclip, X,
+  Loader2, Mail, Phone, UserPlus, Clock, CheckCircle2, CalendarClock, Send, MailCheck, Paperclip, X, AlertTriangle,
 } from "lucide-react";
 
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
@@ -109,6 +109,7 @@ export const RecruitmentPanel = () => {
   if (loading) return <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>;
 
   const counts = data?.counts || {};
+  const followUps = data?.follow_up?.age_mismatch || [];
   return (
     <div>
       <PanelHeading title="Recruitment tracker" intro="Prospective cadets from the website, grouped by when they can join. Message joining instructions to those eligible now, or send a countdown to those waiting." />
@@ -163,6 +164,42 @@ export const RecruitmentPanel = () => {
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-6 bg-white border border-amber-200" data-testid="follow-up-age-mismatch">
+        <div className="h-1 bg-amber-500" />
+        <div className="p-4 border-b border-amber-200 flex items-center gap-2">
+          <AlertTriangle size={18} className="text-amber-700" />
+          <h3 className="font-display font-bold text-raf-navy">Follow Up - Age Mismatch</h3>
+          <span className="ml-auto text-sm font-bold text-raf-slate">{data?.follow_up_counts?.age_mismatch ?? 0}</span>
+        </div>
+        <div className="p-4 space-y-3 min-h-[96px]">
+          {followUps.length === 0 ? (
+            <p className="text-xs text-raf-slate text-center py-4">No mismatches currently flagged.</p>
+          ) : followUps.map((e) => (
+            <div key={`mismatch-${e.id}`} className="border border-amber-200 bg-amber-50/40 p-3" data-testid={`age-mismatch-${e.id}`}>
+              <div className="font-semibold text-raf-navy text-sm">{e.name}</div>
+              <div className="mt-1 text-xs text-raf-slate">
+                Selected: <strong>{e.age_band_label || e.age_band}</strong>
+                {" · "}
+                DoB suggests: <strong>{e.expected_age_band_label || e.expected_age_band || "Needs review"}</strong>
+              </div>
+              {e.age_mismatch_reason && (
+                <div className="mt-1 text-xs text-amber-800">{e.age_mismatch_reason}</div>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-raf-slate">
+                <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1 hover:text-raf-blue"><Mail size={12} /> {e.email}</a>
+                {e.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {e.phone}</span>}
+                {e.dob && <span>DoB: {new Date(e.dob).toLocaleDateString("en-GB")}</span>}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={() => createAccount(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-raf-blue text-white hover:bg-raf-navy transition-colors">
+                  <UserPlus size={12} /> Create account
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Recruit email dialog */}

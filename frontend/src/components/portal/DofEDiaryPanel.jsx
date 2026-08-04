@@ -45,7 +45,10 @@ function isImage(ct = "") {
 
 export const DofEDiaryPanel = () => {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "cfav";
+  const isStaff = user?.role === "admin" || user?.role === "cfav";
+  const isParent = user?.role === "parent";
+  const canEdit = user?.role === "cadet";
+  const linkedCadetId = (isParent && (user?.child_ids || []).length > 0) ? user.child_ids[0] : null;
 
   const [currentWeek, setCurrentWeek] = useState(weekMonday);
   const [section, setSection] = useState("volunteering");
@@ -64,22 +67,23 @@ export const DofEDiaryPanel = () => {
 
   const loadEntries = useCallback(async () => {
     try {
-      const { data } = await api.get("/dofe/diary");
+      const params = isParent && linkedCadetId ? { cadet_id: linkedCadetId } : {};
+      const { data } = await api.get("/dofe/diary", { params });
       setEntries(data);
     } catch {
       toast.error("Could not load DofE diary.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isParent, linkedCadetId]);
 
   const loadPrompts = useCallback(async () => {
-    if (isAdmin) return;
+    if (!canEdit) return;
     try {
       const { data } = await api.get("/dofe/diary/prompt-check");
       setMissing(data.missing || []);
     } catch { /* ignore */ }
-  }, [isAdmin]);
+  }, [canEdit]);
 
   useEffect(() => {
     loadEntries();
@@ -92,7 +96,7 @@ export const DofEDiaryPanel = () => {
   }, [currentEntry]);
 
   const saveEntry = async () => {
-    if (isAdmin) return;
+    if (!canEdit) return;
     setSaving(true);
     try {
       const { data } = await api.post("/dofe/diary", {
@@ -121,6 +125,7 @@ export const DofEDiaryPanel = () => {
   };
 
   const uploadFile = async (file) => {
+    if (!canEdit) return;
     if (!file) return;
     // Ensure an entry exists first
     let entryId = currentEntry?.id;
@@ -181,16 +186,28 @@ export const DofEDiaryPanel = () => {
 
   const downloadDiary = async () => {
     try {
-      const { data } = await api.get("/dofe/diary/export", { responseType: "blob" });
+      const params = isParent && linkedCadetId ? { cadet_id: linkedCadetId } : {};
+      const { data } = await api.get("/dofe/diary/export", { params, responseType: "blob" });
       const blob = new Blob([data], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `DofE_Diary_${user?.first_name || "cadet"}.pdf`;
+      a.download = `DofE_Diary_${isParent ? "cadet" : (user?.first_name || "cadet")}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not download diary.");
+    } catch (err) {
+      let detail = "Could not download diary.";
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) detail = parsed.detail;
+        } catch {
+          // Keep fallback detail
+        }
+      }
+      toast.error(detail);
     }
   };
 
@@ -212,7 +229,9 @@ export const DofEDiaryPanel = () => {
     <div>
       <PanelHeading
         title="DofE Diary"
-        intro={`Record your ${user?.dofe_level ? user.dofe_level.charAt(0).toUpperCase() + user.dofe_level.slice(1) : ""} Award activities each week. Fill in all three sections — Volunteering, Skills and Physical — then download the diary to submit to eDofE.`}
+        intro={canEdit
+          ? `Record your ${user?.dofe_level ? user.dofe_level.charAt(0).toUpperCase() + user.dofe_level.slice(1) : ""} Award activities each week. Fill in all three sections — Volunteering, Skills and Physical — then download the diary to submit to eDofE.`
+          : "View cadet DofE weekly diary entries and supporting files."}
         action={
           <button
             onClick={downloadDiary}
@@ -224,7 +243,7 @@ export const DofEDiaryPanel = () => {
       />
 
       {/* ── Missing sections prompt banner ── */}
-      {!isAdmin && (missingThisWeek.length > 0 || missingOther.length > 0) && (
+      {canEdit && (missingThisWeek.length > 0 || missingOther.length > 0) && (
         <div className="bg-amber-50 border border-amber-300 p-4 mb-5">
           <div className="flex items-start gap-2">
             <AlertTriangle size={18} className="text-amber-600 mt-0.5 shrink-0" />
@@ -315,7 +334,7 @@ export const DofEDiaryPanel = () => {
           )}
         </div>
 
-        {!isAdmin ? (
+        {canEdit ? (
           <>
             <textarea
               className={`${inp} min-h-[160px]`}
@@ -344,7 +363,7 @@ export const DofEDiaryPanel = () => {
       </div>
 
       {/* ── File upload ── */}
-      {!isAdmin && (
+      {canEdit && (
         <div className={`${box} mb-5`}>
           <h3 className="font-display font-bold text-raf-navy mb-2">Attach photos &amp; documents</h3>
           <p className="text-xs text-raf-slate mb-3">Upload photos, certificates or any evidence for this section. Images are shown as previews.</p>
@@ -406,7 +425,7 @@ export const DofEDiaryPanel = () => {
                 )}
                 <div className="flex items-center justify-between gap-1 text-xs text-raf-slate">
                   <span className="truncate">{f.filename}</span>
-                  {!isAdmin && (
+                  {canEdit && (
                     <button
                       onClick={() => deleteFile(f.id)}
                       className="p-1 text-raf-red hover:bg-red-50 transition-colors shrink-0"

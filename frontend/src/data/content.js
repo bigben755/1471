@@ -2,7 +2,7 @@
 import {
   Plane, Wind, Mountain, Award, HeartPulse, Compass, Tent, Trophy,
   TentTree, Shield, BookOpen, HeartHandshake, GraduationCap, Users,
-  Globe2, FileText, BadgeCheck, Briefcase, Sailboat, Target, Rocket,
+  Globe2, FileText, BadgeCheck, Briefcase, Sailboat, Target, Rocket, Wrench,
 } from "lucide-react";
 
 export const CREST_URL =
@@ -67,6 +67,7 @@ export const ACTIVITIES = [
     video: IMG("flying/flying.mp4"),
     gallery: [
       { src: IMG("flying/flying.mp4"), type: "video", caption: "Flying with the RAF Air Cadets" },
+      { src: IMG("flying/flying.jpg"), caption: "Cadets on a flying day" },
       { src: IMG("flying/flying-cadet-being-fitted-with-kit.jpg"), caption: "Being fitted with flying kit" },
       { src: IMG("flying/flying-getting-in-the-aircraft.jpg"), caption: "Getting into the aircraft" },
       { src: IMG("flying/flying-cadet-in-cockpit.jpg"), caption: "In the cockpit" },
@@ -111,6 +112,7 @@ export const ACTIVITIES = [
       { src: IMG("gliding/gliding-cadets-helping.jpg"), caption: "Cadets helping on the airfield" },
       { src: IMG("gliding/20230617_102323.jpg"), caption: "Preparing for gliding" },
       { src: IMG("gliding/20230617_141944.jpg"), caption: "Gliding day on the airfield" },
+      { src: IMG("gliding/IMG_6021.JPEG"), caption: "Gliding team on station" },
     ],
     text: "Cadets can work towards gliding experiences delivered in line with RAFAC procedures and programme planning.",
     long: [
@@ -143,6 +145,10 @@ export const ACTIVITIES = [
       { src: IMG("adventure_training/adventure_training_images (7).jpg"), caption: "Challenge and resilience" },
       { src: IMG("adventure_training/adventure_training_images (8).jpg"), caption: "Hill and outdoor training" },
       { src: IMG("adventure_training/Road marching.jpg"), caption: "Road marching exercise" },
+      { src: IMG("adventure_training/IMG_20240211_125634291_MFNR.jpg"), caption: "Adventure training in action" },
+      { src: IMG("adventure_training/IMG_3437.JPEG"), caption: "Team outdoor session" },
+      { src: IMG("adventure_training/IMG_4285.JPG"), caption: "Adventure skills development" },
+      { src: IMG("adventure_training/IMG_4360.JPG"), caption: "Cadets on exercise" },
     ],
     text: "Climbing, hill walking, kayaking and more, where available, supervised and weather-dependent.",
     long: [
@@ -204,6 +210,7 @@ export const ACTIVITIES = [
       { src: IMG("d_of_e/dofe_images (3).jpg"), caption: "DofE teamwork" },
       { src: IMG("d_of_e/dofe_images (4).jpg"), caption: "Expedition route" },
       { src: IMG("d_of_e/dofe_images (5).jpg"), caption: "DofE milestone" },
+      { src: IMG("d_of_e/96f5bfce-0c88-40f1-9646-4f0891c8ba91.JPG"), caption: "DofE practical training" },
     ],
     text: "Cadets can work towards Bronze, Silver and Gold DofE awards through the squadron programme.",
     long: [
@@ -235,6 +242,9 @@ export const ACTIVITIES = [
       { src: IMG("first_aid/first_aid_images (5).jpg"), caption: "First aid in practice" },
       { src: IMG("first_aid/first_aid_images (6).jpg"), caption: "Developing confidence to act" },
       { src: IMG("first_aid/first_aid_images (7).jpg"), caption: "First aid team practice" },
+      { src: IMG("first_aid/DSC_0222 (1).jpg"), caption: "Hands-on casualty response" },
+      { src: IMG("first_aid/DSC_0367.jpg"), caption: "First aid scenario training" },
+      { src: IMG("first_aid/IMG_4317.JPG"), caption: "Cadets practising first aid" },
     ],
     text: "Cadets may work towards recognised first aid training and qualifications, subject to eligibility.",
     long: [
@@ -260,6 +270,8 @@ export const ACTIVITIES = [
     image: IMG("leadership/SMEAC leadership.png"),
     gallery: [
       { src: IMG("leadership/SMEAC leadership.png"), caption: "SMEAC leadership framework in practice" },
+      { src: IMG("leadership/IMG_20240629_142403534_MFNR.jpg"), caption: "Leadership challenge activity" },
+      { src: IMG("leadership/IMG_3446.JPG"), caption: "Cadets leading by example" },
     ],
     text: "Practical leadership tasks, teamwork challenges and NCO development opportunities.",
     long: [
@@ -322,6 +334,14 @@ export const ACTIVITIES = [
       { src: IMG("fieldcraft/20260721_102342.jpg"), caption: "Working as a team" },
       { src: IMG("fieldcraft/20260721_201242.jpg"), caption: "Practical field skills" },
       { src: IMG("fieldcraft/20260721_210758.jpg"), caption: "Evening fieldcraft session" },
+      { src: IMG("fieldcraft/20260721_102742 (1).jpg"), caption: "Field movement exercise" },
+      { src: IMG("fieldcraft/20260721_120052.jpg"), caption: "Navigation and movement" },
+      { src: IMG("fieldcraft/20260721_120100.jpg"), caption: "Section field briefing" },
+      { src: IMG("fieldcraft/20260721_160540.jpg"), caption: "Cadets in the field" },
+      { src: IMG("fieldcraft/20260721_201053.jpg"), caption: "Evening field deployment" },
+      { src: IMG("fieldcraft/20260721_201058.jpg"), caption: "Team fieldcraft session" },
+      { src: IMG("fieldcraft/20260721_210551.jpg"), caption: "Night fieldcraft prep" },
+      { src: IMG("fieldcraft/20260723_182004 (1).jpg"), caption: "Fieldcraft consolidation" },
     ],
     text: "Learn navigation, teamwork and outdoor skills through structured fieldcraft training.",
     long: [
@@ -350,8 +370,12 @@ export const ACTIVITIES = [
       { src: IMG("sport/archery (1).jpg"), caption: "Archery training" },
       { src: IMG("sport/archery (2).jpg"), caption: "Taking aim" },
       { src: IMG("sport/wing competition day 3 - archery.jpg"), caption: "Wing competition day — archery" },
+      { src: IMG("sport/5504e9ff-eb34-438e-9ca7-1bd78cb8d0a1.JPEG"), caption: "Squadron sport challenge" },
       { src: IMG("sport/20250622_104409.jpg"), caption: "Sport activity" },
       { src: IMG("sport/20250622_104502(1).jpg"), caption: "Training session" },
+      { src: IMG("sport/IMG_20240629_143842497_MFNR.jpg"), caption: "Cadets representing the squadron" },
+      { src: IMG("sport/IMG_20240729_203442331_MFNR.jpg"), caption: "Sport progression session" },
+      { src: IMG("sport/IMG_4258.JPG"), caption: "Team sport performance" },
       { src: IMG("sport/20250907_120709.jpg"), caption: "Squadron sport day" },
       { src: IMG("sport/20250907_120821.jpg"), caption: "Competing as a team" },
       { src: IMG("sport/20250609_201203.jpg"), caption: "Sport at the squadron" },
@@ -483,6 +507,14 @@ export const ACTIVITIES = [
       { src: IMG("parades/parade_images (3).jpg"), caption: "Uniform and bearing" },
       { src: IMG("parades/20220911_122531.jpg"), caption: "Parade day" },
       { src: IMG("parades/20220911_130934(0).jpg"), caption: "Marching with pride" },
+      { src: IMG("parades/IMG_20240204_115423996_MFNR.jpg"), caption: "Parade formation" },
+      { src: IMG("parades/IMG_20240606_190820990_MFNR.jpg"), caption: "Parade evening" },
+      { src: IMG("parades/IMG_20240606_211840270_MFNR.jpg"), caption: "Squadron parade routine" },
+      { src: IMG("parades/IMG_4057.JPG"), caption: "Drill and bearing" },
+      { src: IMG("parades/IMG_5164.JPEG"), caption: "Parade preparations" },
+      { src: IMG("parades/IMG_5373.JPEG"), caption: "On squadron parade" },
+      { src: IMG("parades/IMG_5506.JPEG"), caption: "Cadet parade turnout" },
+      { src: IMG("parades/IMG_5509.JPEG"), caption: "Drill and formation practice" },
       { src: IMG("drill_training/drill training.jpg"), caption: "Drill training" },
       { src: IMG("drill_training/drill training 2.jpg"), caption: "Drill practice" },
       { src: IMG("drill_training/drill training 3.jpg"), caption: "Precision and teamwork" },
@@ -519,6 +551,9 @@ export const ACTIVITIES = [
       { src: IMG("classification_training/20250607_120544.jpg"), caption: "Learning as a team" },
       { src: IMG("classification_training/Screenshot 2025-05-21 194351.png"), caption: "Training content and study resources" },
       { src: IMG("classification_training/Screenshot 2025-05-21 194444.png"), caption: "Classification learning materials" },
+      { src: IMG("classification_training/IMG_3442.JPG"), caption: "Classification classroom work" },
+      { src: IMG("classification_training/IMG_4085.JPEG"), caption: "Cadets in structured training" },
+      { src: IMG("classification_training/cc2c0e18-6a09-4aa7-b1ea-f13fc8a0710e.jpg"), caption: "Training progression session" },
     ],
     text: "Classification Training develops cadet knowledge across aviation, air power and related subjects through progressive study levels.",
     long: [
@@ -546,6 +581,8 @@ export const ACTIVITIES = [
       { src: IMG("flight_sim/flight-sim-1.jpg"), caption: "On the flight simulator" },
       { src: IMG("flight_sim/flight-sim-2.jpg"), caption: "Learning the controls" },
       { src: IMG("flight_sim/flight-sim-3.jpg"), caption: "Putting theory into practice" },
+      { src: IMG("flight_sim/flight_sim (1).jpg"), caption: "Simulator training" },
+      { src: IMG("flight_sim/flight_sim (2).jpg"), caption: "Flight sim practical" },
       { src: IMG("careeers-days/careers-day-at-mbda.jpg"), caption: "Careers day at MBDA" },
       { src: IMG("stem/20260510_114429.jpg"), caption: "STEM activity" },
       { src: IMG("stem/20260510_135743.jpg"), caption: "Hands-on STEM learning" },
@@ -589,6 +626,9 @@ export const ACTIVITIES = [
       { src: IMG("fundraising/20251101_092450.jpg"), caption: "Cadets supporting a local appeal" },
       { src: IMG("fundraising/20251101_131631.jpg"), caption: "Fundraising in the community" },
       { src: IMG("fundraising/poppy appeal collecting.jpg"), caption: "Poppy Appeal collection" },
+      { src: IMG("fundraising/IMG_1094.jpeg"), caption: "Fundraising team effort" },
+      { src: IMG("fundraising/IMG_6404.JPEG"), caption: "Supporting local fundraising" },
+      { src: IMG("fundraising/IMG_6547.JPEG"), caption: "Community support activity" },
     ],
     text: "Represent the squadron at parades, fundraising and local community events.",
     long: [
@@ -620,6 +660,7 @@ export const ACTIVITIES = [
       { src: IMG("shooting/shooting (5).jpg"), caption: "Concentration and discipline" },
       { src: IMG("shooting/shooting (6).jpg"), caption: "Squadron shooting activity" },
       { src: IMG("shooting/shooting.jpg"), caption: "Shooting with 1471 Squadron" },
+      { src: IMG("shooting/IMG_3437.JPEG"), caption: "Range focus and control" },
     ],
     text: "Cadets develop marksmanship skills through coached range sessions, with competition opportunities at wing and corps level.",
     long: [
@@ -656,6 +697,10 @@ export const ACTIVITIES = [
       { src: IMG("stem/stem_images (2).jpeg"), caption: "Team science challenge" },
       { src: IMG("stem/stem_images (3).jpeg"), caption: "STEM at 1471 Squadron" },
       { src: IMG("staff_development/stem 1.jpg"), caption: "STEM officer in action" },
+      { src: IMG("staff_development/staff development - commission 2.jpg"), caption: "Staff-led technical mentoring" },
+      { src: IMG("staff_development/staff development - commission 3.jpg"), caption: "Cadet development support" },
+      { src: IMG("staff_development/staff development - fieldcraft officer.jpg"), caption: "Staff-led STEM and fieldcraft development" },
+      { src: IMG("staff_development/staff development - shooting officer.jpg"), caption: "Specialist staff development support" },
     ],
     text: "Practical STEM activities link aviation knowledge to real science and engineering challenges, inspiring future careers in technical fields.",
     long: [
@@ -690,6 +735,9 @@ export const ACTIVITIES = [
       { src: IMG("rememberance/poppy-appeal-1.jpg"), caption: "Poppy Appeal" },
       { src: IMG("rememberance/poppy-appeal-collecting.jpg"), caption: "Collecting for the Poppy Appeal" },
       { src: IMG("rememberance/poppy-appeal-collecting-2.jpg"), caption: "Supporting the Poppy Appeal" },
+      { src: IMG("rememberance/IMG_6157.JPEG"), caption: "Remembrance event participation" },
+      { src: IMG("rememberance/IMG_6164.JPEG"), caption: "Cadets on remembrance duty" },
+      { src: IMG("rememberance/IMG_6179.JPEG"), caption: "Parade and remembrance service" },
       { src: IMG("rememberance_concert/rememberance-concert-bolton-1.jpg"), caption: "Remembrance concert, Bolton" },
       { src: IMG("rememberance_concert/rememberance concert.jpg"), caption: "Remembrance concert performance" },
       { src: IMG("rememberance_concert/rememberance-concert-2.jpg"), caption: "Concert in honour" },
@@ -706,6 +754,68 @@ export const ACTIVITIES = [
       "Represent 1471 Horwich at civic and community events",
       "Take part in remembrance concerts and ceremonies",
       "Develop bearing, pride and a sense of service",
+    ],
+  },
+  {
+    slug: "dining-in-night", title: "Dining In Night", icon: Shield,
+    strapline: "A formal squadron evening that builds confidence, standards and esprit de corps.",
+    quickFacts: ["Formal dress and etiquette", "Squadron traditions", "Leadership and confidence in a formal setting"],
+    whatToExpect: [
+      "A structured formal evening with clear expectations and ceremony",
+      "Cadets developing confidence in etiquette, bearing and social skills",
+      "A memorable squadron occasion celebrating achievement and pride",
+    ],
+    image: IMG("dining_in_night/dining in night.jpg"),
+    gallery: [
+      { src: IMG("dining_in_night/dining in night.jpg"), caption: "Dining In Night" },
+      { src: IMG("dining_in_night/IMG_4579.JPEG"), caption: "Dining In Night formal setting" },
+      { src: IMG("dining_in_night/IMG_6297.JPEG"), caption: "Cadets at Dining In Night" },
+      { src: IMG("dining_in_night/IMG_6299.JPEG"), caption: "Formal evening traditions" },
+      { src: IMG("dining_in_night/IMG_6301.JPEG"), caption: "Dining In Night ceremony" },
+      { src: IMG("dining_in_night/IMG_6302.JPEG"), caption: "Squadron formal event" },
+      { src: IMG("dining_in_night/IMG_6304.JPEG"), caption: "Cadet formal evening" },
+      { src: IMG("dining_in_night/IMG_6308.JPEG"), caption: "Dining In Night evening" },
+      { src: IMG("dining_in_night/IMG_6311.JPEG"), caption: "Formal dining tradition" },
+    ],
+    text: "Dining In Night gives cadets experience of formal squadron traditions, confidence in etiquette, and pride in representing the unit.",
+    long: [
+      "Dining In Night is a formal and memorable part of squadron life. It introduces cadets to ceremonial standards, etiquette and the traditions that underpin RAF Air Cadets culture.",
+      "The evening helps cadets build confidence, presentation and social skills in a structured setting while celebrating squadron identity and achievements.",
+    ],
+    highlights: [
+      "Take part in a formal ceremonial squadron evening",
+      "Build confidence in etiquette and formal conduct",
+      "Strengthen squadron identity and team pride",
+      "Celebrate cadet achievement in a distinctive setting",
+    ],
+  },
+  {
+    slug: "model-making", title: "Model Making", icon: Wrench,
+    strapline: "Develop patience, precision and creativity through hands-on builds.",
+    quickFacts: ["Hands-on construction projects", "Attention to detail and craftsmanship", "Supports STEM and aviation interest"],
+    whatToExpect: [
+      "Building models step-by-step with planning and precision",
+      "Learning practical making skills and improving concentration",
+      "Applying creativity while linking projects to aviation and engineering themes",
+    ],
+    image: IMG("model_making/IMG_20240407_095517_2.jpg"),
+    gallery: [
+      { src: IMG("model_making/IMG_20240121_131731210_1_MFNR.jpg"), caption: "Model build session" },
+      { src: IMG("model_making/IMG_20240407_095517_2.jpg"), caption: "Detailed model-making work" },
+      { src: IMG("model_making/IMG_4579.JPEG"), caption: "Cadets developing model-making skills" },
+      { src: IMG("model_making/diorama 1.jpg"), caption: "Diorama build" },
+      { src: IMG("model_making/diorama 2.jpg"), caption: "Finished diorama" },
+    ],
+    text: "Model making sessions build practical skills, patience and attention to detail while supporting aviation and STEM learning.",
+    long: [
+      "Model making gives cadets a practical way to develop focus, craftsmanship and problem-solving. Projects encourage careful planning, steady execution and pride in quality outcomes.",
+      "These sessions also reinforce wider STEM and aviation interests by connecting technical detail with hands-on making and teamwork.",
+    ],
+    highlights: [
+      "Develop practical construction and finishing skills",
+      "Improve concentration, patience and attention to detail",
+      "Support wider STEM and aviation-themed learning",
+      "Take pride in creating and presenting completed builds",
     ],
   },
   {
@@ -764,6 +874,8 @@ export const ACTIVITY_FOCUS = {
   "shooting":            "object-[50%_40%]", // prone position, subject mid-frame
   "first-aid":           "object-top",       // training scenario, faces top
   "adventure-training":  "object-top",       // outdoor group
+  "dining-in-night":     "object-top",       // formal event portraits
+  "model-making":        "object-top",       // tabletop builds and faces
 };
 
 export const CADET_BULLETS = [

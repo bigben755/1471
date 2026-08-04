@@ -25,13 +25,43 @@ function buildMatrix(year, month) {
 const sameDay = (a, b) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+const endOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+function eventDateRange(event) {
+  const start = new Date(event.start);
+  if (Number.isNaN(start.getTime())) return null;
+  const parsedEnd = event.end ? new Date(event.end) : null;
+  const end = parsedEnd && !Number.isNaN(parsedEnd.getTime()) ? parsedEnd : start;
+  return end < start ? { start, end: start } : { start, end };
+}
+
+function spansDay(event, day) {
+  const range = eventDateRange(event);
+  if (!range) return false;
+  return range.start <= endOfDay(day) && range.end >= startOfDay(day);
+}
+
+function formatEventTimeRange(event) {
+  const range = eventDateRange(event);
+  if (!range) return "";
+  const startLabel = range.start.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const startTime = range.start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const endLabel = range.end.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const endTime = range.end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  if (sameDay(range.start, range.end)) {
+    return `${startLabel} ${startTime}${startTime !== endTime ? ` - ${endTime}` : ""}`;
+  }
+  return `${startLabel} ${startTime} - ${endLabel} ${endTime}`;
+}
+
 export const Calendar = ({ events, onSelect }) => {
   const today = new Date();
   const [cursor, setCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const cells = buildMatrix(cursor.getFullYear(), cursor.getMonth());
 
   const eventsOn = (day) =>
-    events.filter((e) => sameDay(new Date(e.start), day));
+    events.filter((e) => spansDay(e, day));
 
   return (
     <div data-testid="calendar" className="bg-white border border-white">
@@ -158,8 +188,8 @@ export const Agenda = ({ events, onSelect }) => {
                     {e.title}
                   </div>
                   <div className="text-xs text-raf-slate mt-0.5 truncate">
-                    {d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                    {e.location ? ` · ${e.location}` : ""}
+                    {formatEventTimeRange(e)}
+                    {e.location ? ` | ${e.location}` : ""}
                   </div>
                 </div>
                 <span className={`self-center text-[10px] uppercase px-2 py-0.5 shrink-0 ${COLOUR[e.colour]}`}>{STATUS[e.colour]}</span>
@@ -189,7 +219,7 @@ export const UpcomingList = ({ events, onSelect }) => {
             </div>
             <div className="mt-2 font-display font-bold text-raf-navy">{e.title}</div>
             <div className="text-xs text-raf-slate mt-1">
-              {new Date(e.start).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+              {formatEventTimeRange(e)}
             </div>
             {e.location && <div className="text-xs text-raf-slate mt-1 flex items-center gap-1"><MapPin size={12} /> {e.location}</div>}
           </button>

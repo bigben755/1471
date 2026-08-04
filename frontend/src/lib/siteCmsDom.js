@@ -70,6 +70,38 @@ export function extractPageEditableContent(root) {
   return { texts, images };
 }
 
+export function extractPageEditableNodes(root) {
+  const texts = [];
+  const images = [];
+  if (!root) return { texts, images };
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  let el = root;
+  while (el) {
+    if (!shouldSkipElement(el)) {
+      const entries = textEntriesForParent(el, root);
+      entries.forEach((entry) => {
+        texts.push({
+          key: entry.key,
+          value: norm(entry.value),
+          node: entry.node,
+          parent: el,
+        });
+      });
+      if (el.tagName === "IMG") {
+        images.push({
+          key: elementDomKey(el, root),
+          el,
+          src: el.getAttribute("src") || "",
+          alt: el.getAttribute("alt") || "",
+        });
+      }
+    }
+    el = walker.nextNode();
+  }
+  return { texts, images };
+}
+
 export function applyPageOverrides(root, overrides) {
   if (!root || !overrides) return;
   const textMap = overrides.texts || {};

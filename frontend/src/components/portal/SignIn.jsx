@@ -5,7 +5,7 @@ import { Loader2, ArrowLeft } from "lucide-react";
 
 export const SignIn = () => {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -15,7 +15,7 @@ export const SignIn = () => {
     setLoading(true);
     setError("");
     try {
-      await login(email.trim().toLowerCase(), password);
+      await login(identifier.trim(), password);
     } catch (err) {
       setError(err.response?.data?.detail || "Sign in failed. Please try again.");
     } finally {
@@ -42,12 +42,12 @@ export const SignIn = () => {
           Sign in with the account details provided by squadron staff.
         </p>
 
-        <label className="block text-sm font-semibold text-raf-navy mb-2">Email</label>
+        <label className="block text-sm font-semibold text-raf-navy mb-2">Email or username</label>
         <input
           data-testid="signin-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          type="text"
+          value={identifier}
+          onChange={(e) => setIdentifier(e.target.value)}
           className="w-full border border-raf-sky px-4 py-3 mb-4 outline-none focus:border-raf-blue"
           required
         />

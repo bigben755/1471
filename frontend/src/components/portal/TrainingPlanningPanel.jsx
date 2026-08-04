@@ -135,6 +135,19 @@ export const TrainingPlanningPanel = () => {
     } finally { setBusy(false); }
   };
 
+  const publishMonthToCalendar = async () => {
+    if (!/^\d{4}-\d{2}$/.test(pdfMonth)) { toast.error("Month must be YYYY-MM."); return; }
+    setBusy(true);
+    try {
+      const { data } = await api.post("/training-plan/publish-month", null, { params: { month: pdfMonth } });
+      toast.success(`Training plan published to calendar for ${data.month}.`, {
+        description: `${data.created} created, ${data.updated} updated, ${data.removed} removed.`,
+      });
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not publish training plan to calendar.");
+    } finally { setBusy(false); }
+  };
+
   const saveSlot = async (slot) => {
     const edit = slotEdits[slot.id] || {
       first_period_activity: slot.first_period_activity || "",
@@ -171,16 +184,35 @@ export const TrainingPlanningPanel = () => {
   const downloadA4 = async () => {
     setBusy(true);
     try {
-      const { data } = await api.get("/training-plan/a4", { params: { month: pdfMonth }, responseType: "blob" });
-      const blob = new Blob([data], { type: "application/pdf" });
+      const res = await api.get("/training-plan/a4", {
+        params: { month: pdfMonth, format: "html" },
+        responseType: "blob",
+      });
+      const contentType = res.headers?.["content-type"] || "text/html";
+      const blob = new Blob([res.data], { type: contentType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `training-plan-${pdfMonth}.pdf`;
+      const disposition = res.headers?.["content-disposition"] || "";
+      const m = disposition.match(/filename="?([^\"]+)"?/i);
+      a.download = m?.[1] || `training-plan-${pdfMonth}.html`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Could not download training plan PDF.");
+      let detail = "Could not download training plan.";
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          if (parsed?.detail) detail = parsed.detail;
+        } catch {
+          // Keep fallback detail
+        }
+      } else if (data?.detail) {
+        detail = data.detail;
+      }
+      toast.error(detail);
     } finally { setBusy(false); }
   };
 
@@ -301,6 +333,9 @@ export const TrainingPlanningPanel = () => {
                   Apply template
                 </button>
                 <input value={pdfMonth} onChange={(e) => setPdfMonth(e.target.value)} className={inp} placeholder="YYYY-MM" />
+                <button type="button" onClick={publishMonthToCalendar} disabled={busy} className="inline-flex items-center gap-2 px-4 py-2.5 bg-raf-sky text-raf-blue hover:bg-raf-blue hover:text-white transition-colors disabled:opacity-60">
+                  <CalendarDays size={16} /> Publish to calendar
+                </button>
                 <button type="button" onClick={downloadA4} disabled={busy} className="inline-flex items-center gap-2 px-4 py-2.5 bg-raf-red text-white hover:bg-[#A00926] transition-colors disabled:opacity-60">
                   <Download size={16} /> Download A4 plan
                 </button>

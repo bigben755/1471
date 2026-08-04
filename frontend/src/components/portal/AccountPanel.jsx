@@ -36,8 +36,17 @@ export const AccountPanel = () => {
           <dl className="text-sm space-y-2">
             <div className="flex justify-between"><dt className="text-raf-slate">Name</dt><dd className="text-raf-navy font-medium">{user?.first_name} {user?.last_name}</dd></div>
             <div className="flex justify-between"><dt className="text-raf-slate">Email</dt><dd className="text-raf-navy font-medium">{user?.email}</dd></div>
+            <div className="flex justify-between"><dt className="text-raf-slate">Username</dt><dd className="text-raf-navy font-medium">{user?.login_username || "-"}</dd></div>
             <div className="flex justify-between"><dt className="text-raf-slate">Role</dt><dd className="text-raf-navy font-medium capitalize">{user?.role}</dd></div>
           </dl>
+          {user?.role === "cadet" && (
+            <div className="mt-4 border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-semibold">First-time sign in details</p>
+              <p>Username: {user?.login_username || "(not set)"}</p>
+              <p>Standard password: {user?.initial_password || "Squadron123!"}</p>
+              <p className="mt-1">Change this password straight after your first sign-in.</p>
+            </div>
+          )}
           <p className="mt-4 text-xs text-raf-slate">To change your name, email or role, please contact squadron staff.</p>
         </div>
 

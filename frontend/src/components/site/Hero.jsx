@@ -42,11 +42,21 @@ export const Hero = () => {
               </span>
             </motion.div>
 
-            <motion.h1
+            <motion.div
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.05 }}
-              className="font-display font-black tracking-tight text-white text-4xl sm:text-5xl lg:text-6xl leading-[1.02]"
+              className="mt-1 mb-7 flex w-full items-center justify-center"
+              data-testid="hero-crest-prominent"
+            >
+              <img src={CREST_URL} alt="1471 Horwich Squadron crest" className="w-56 h-56 md:w-72 md:h-72 lg:w-[21rem] lg:h-[21rem] object-contain drop-shadow-[0_14px_34px_rgba(0,0,0,0.55)]" />
+            </motion.div>
+
+            <motion.h1
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, delay: 0.1 }}
+              className="text-center font-display font-black tracking-tight text-white text-4xl sm:text-5xl lg:text-6xl leading-[1.02]"
             >
               1471 Horwich
               <br />
@@ -69,29 +79,40 @@ export const Hero = () => {
               initial={{ opacity: 0, y: 24 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.65, delay: 0.25 }}
-              className="mt-9 flex flex-col sm:flex-row flex-wrap gap-3"
+              className="mt-9"
             >
-              <button
-                data-testid="hero-join-cadet"
-                onClick={() => join("Join as a Cadet")}
-                className="px-7 py-3.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors animate-pulse-cta"
-              >
-                Join as a Cadet
-              </button>
-              <button
-                data-testid="hero-become-volunteer"
-                onClick={() => join("Adult Volunteer Enquiry")}
-                className="px-7 py-3.5 bg-white text-raf-navy font-semibold hover:bg-raf-sky transition-colors"
-              >
-                Become an Adult Volunteer
-              </button>
-              <button
-                data-testid="hero-message-squadron"
-                onClick={() => join("General Enquiry")}
-                className="px-7 py-3.5 border-2 border-white/70 text-white font-semibold hover:bg-white hover:text-raf-navy transition-colors"
-              >
-                Message the Squadron
-              </button>
+              <div className="grid sm:grid-cols-2 gap-3 max-w-2xl">
+                <button
+                  data-testid="hero-join-cadet"
+                  onClick={() => join("Join as a Cadet")}
+                  className="px-7 py-3.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors animate-pulse-cta"
+                >
+                  Join 1471 Squadron
+                </button>
+                <a
+                  data-testid="hero-existing-member-login"
+                  href="/portal"
+                  className="px-7 py-3.5 bg-white text-raf-navy font-semibold hover:bg-raf-sky transition-colors text-center"
+                >
+                  Existing Member Login
+                </a>
+              </div>
+              <div className="mt-3 flex flex-col sm:flex-row flex-wrap gap-3">
+                <button
+                  data-testid="hero-become-volunteer"
+                  onClick={() => join("Adult Volunteer Enquiry")}
+                  className="px-7 py-3.5 bg-white/10 text-white font-semibold border border-white/30 hover:bg-white/20 transition-colors"
+                >
+                  Become an Adult Volunteer
+                </button>
+                <button
+                  data-testid="hero-message-squadron"
+                  onClick={() => join("General Enquiry")}
+                  className="px-7 py-3.5 border-2 border-white/70 text-white font-semibold hover:bg-white hover:text-raf-navy transition-colors"
+                >
+                  Message the Squadron
+                </button>
+              </div>
             </motion.div>
 
             <motion.div
@@ -184,19 +205,6 @@ export const Hero = () => {
                 </div>
               </motion.div>
             </div>
-            {/* Floating crest badge */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: 0.65 }}
-              className="absolute -bottom-4 -left-4 bg-raf-navy border border-white/20 p-3 flex items-center gap-3 shadow-2xl"
-            >
-              <img src={CREST_URL} alt="Crest" className="w-10 h-10 object-contain" />
-              <div>
-                <div className="text-white font-display font-black text-sm leading-tight">1471 Horwich</div>
-                <div className="text-raf-sky text-[10px] uppercase tracking-widest">RAF Air Cadets</div>
-              </div>
-            </motion.div>
             {/* Red accent bar */}
             <div className="absolute top-0 right-0 w-[3px] h-full bg-raf-red" />
           </motion.div>

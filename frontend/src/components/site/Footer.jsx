@@ -3,7 +3,7 @@ import { CREST_URL, LINKS, VENUE, NAV_ITEMS } from "../../data/content";
 import { Roundel, SwooshDivider } from "./Motifs";
 import { Facebook, ExternalLink, MapPin, Clock } from "lucide-react";
 
-export const Footer = ({ canEdit = false, editOpen = false, onEditToggle = null }) => {
+export const Footer = () => {
   const navigate = useNavigate();
   return (
   <footer data-testid="site-footer" className="relative bg-raf-navy text-white overflow-hidden">
@@ -87,19 +87,7 @@ export const Footer = ({ canEdit = false, editOpen = false, onEditToggle = null 
         </p>
         <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-white/45">
           <span>&copy; {new Date().getFullYear()} 1471 Horwich Squadron RAF Air Cadets</span>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              data-testid="footer-edit-pill"
-              onClick={() => canEdit && onEditToggle && onEditToggle()}
-              disabled={!canEdit}
-              className={`px-3 py-1 rounded-full border text-[11px] uppercase tracking-[0.15em] transition-colors ${canEdit ? (editOpen ? "bg-raf-red border-raf-red text-white" : "bg-raf-sky/30 border-raf-sky text-raf-sky hover:bg-raf-sky hover:text-raf-navy") : "bg-white/5 border-white/15 text-white/40 cursor-not-allowed"}`}
-              title={canEdit ? "Edit this page" : "Admin editing only"}
-            >
-              Edit
-            </button>
-            <a data-testid="footer-admin-link" href="/portal" className="hover:text-white/80 transition-colors">Members area sign in</a>
-          </div>
+          <a data-testid="footer-admin-link" href="/portal" className="hover:text-white/80 transition-colors">Members area sign in</a>
         </div>
       </div>
     </div>
