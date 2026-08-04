@@ -105,6 +105,10 @@ and prospective adult volunteers. Must feel professional, aviation-led, trustwor
 - **Calendar List/Agenda view** (`Calendar.jsx` `Agenda` export + `CalendarPanel.jsx` toggle): new List↔Grid toggle (`view-agenda`/`view-month`, `data-testid="calendar-view-toggle"`). Defaults to **List (agenda)** on phones (`window.innerWidth < 640`), Grid on desktop. Agenda groups upcoming events by month with a date block, colour status bar, title, time, location, status pill and premium star; item testid `agenda-event-{id}`. Grid view keeps the month grid + Upcoming list.
 - **Mobile nav drawer polish** (`Header.jsx`): now an app-like right-side slide-in panel (`w-[84%] max-w-xs`) with a dimmed+blurred backdrop (`mobile-menu-backdrop`, tap to close), a panel header with a close button (`mobile-menu-close`), and Escape-to-close. IMPORTANT FIX: the drawer/backdrop are rendered OUTSIDE `<header>` (as siblings via a fragment) because the header's `backdrop-blur-md` created a containing block that trapped the `fixed` drawer to 68px. z-index: header z-50, backdrop z-[60], drawer z-[70]. Verified open/close/backdrop-tap on mobile.
 
+## Deployment blocker fix — 2026-06-21
+- **Backend crashed on startup** → production deploy failed readiness check. Root cause: `@app.on_event("startup")` (`on_startup`) called `asyncio.create_task(_inactivity_reminder_loop())` but `_inactivity_reminder_loop` was never defined (abandoned half-built "inactivity reminder" feature — only leftover `last_login_at`/`login_reminder_sent_at` field resets on login, no loop/email impl). Every uvicorn boot raised `NameError` in starlette's lifespan startup → nginx never became ready → k8s timeout.
+- Fix: removed the single undefined `create_task(...)` line; `_progression_alert_loop` still starts. Verified: backend boots ("Application startup complete"), `/api/`=200, admin+cadet login=200, deployment_agent PASS, testing agent iteration_8 = 6/6 backend tests pass. User must **redeploy**.
+
 ## Backlog / tech debt (open, prioritised)
 
 ## Email — switched to Resend — 2026-06-21
