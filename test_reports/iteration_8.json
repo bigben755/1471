@@ -1,0 +1,27 @@
+{
+  "summary": "Verified backend startup fix (removed undefined _inactivity_reminder_loop() call). Backend now boots cleanly and all core endpoints work. 6/6 pytest tests pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {},
+  "test_report_links": [
+    "/app/backend/tests/test_startup_and_core.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is very large (>4600 lines) - consider splitting into modules (routers, services, models).",
+    "Ensure any other references to _inactivity_reminder_loop (e.g. in code comments or config that might re-enable it) are cleaned up so the abandoned feature isn't accidentally reintroduced."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_startup_and_core.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (per request)"},
+  "test_credentials": "admin@1471horwich.org.uk / Squadron1471!, cadet@1471horwich.org.uk / Cadet1471! (from review request)",
+  "seed_data_creation": "None (test enquiry uses random email; DB write side-effect only).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend supervisor logs previously showed repeating NameError for _inactivity_reminder_loop until pid 18755 started cleanly. Endpoints validated post-fix: GET /api/, POST /api/auth/login (admin+cadet), GET /api/auth/me, GET /api/events, GET /api/notices, POST /api/enquiries. Enquiry POST requires enquiry_type and consent fields (Pydantic model).",
+  "rca of the issue": "Startup handler in server.py referenced a background task function (_inactivity_reminder_loop) that was never implemented - an abandoned half-built feature. Every uvicorn boot raised NameError inside starlette's lifespan startup, preventing the app from serving traffic. Fix: removed the single `asyncio.create_task(_inactivity_reminder_loop())` line; _progression_alert_loop task still starts. Verified via clean supervisor logs (Application startup complete) and successful smoke tests."
+}
