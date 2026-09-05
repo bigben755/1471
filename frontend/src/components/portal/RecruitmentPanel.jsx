@@ -1,53 +1,109 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../../api";
 import { toast } from "sonner";
 import { PanelHeading } from "./PortalShell";
 import { UserFormDialog } from "./UserFormDialog";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "../ui/dialog";
 import {
-  Loader2, Mail, Phone, UserPlus, Clock, CheckCircle2, CalendarClock, Send, MailCheck, Paperclip, X, AlertTriangle,
+  AlertTriangle, CalendarClock, CheckCircle2, Loader2, Mail, MailCheck, Paperclip,
+  Phone, Send, UserPlus, X,
 } from "lucide-react";
 
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
-const BUCKETS = [
-  { key: "now", label: "Can join now", icon: CheckCircle2, tone: "text-emerald-700", bar: "bg-emerald-600",
-    kind: "joining", cta: "Send joining instructions", bulkCta: "Email joining instructions to all" },
-  { key: "september", label: "Eligible in September", icon: CalendarClock, tone: "text-amber-700", bar: "bg-amber-500",
-    kind: "countdown", cta: "Send countdown email", bulkCta: "Email countdown to all" },
-  { key: "future", label: "Eligible in the future", icon: Clock, tone: "text-raf-blue", bar: "bg-raf-blue",
-    kind: "countdown", cta: "Send countdown email", bulkCta: "Email countdown to all" },
+const CATEGORIES = [
+  { key: "uncategorised", label: "Needs categorising", bar: "bg-amber-500", tone: "text-amber-800" },
+  { key: "ready_now", label: "Ready now", bar: "bg-emerald-600", tone: "text-emerald-700" },
+  { key: "september_2028", label: "September 2028", bar: "bg-raf-blue", tone: "text-raf-blue" },
+  { key: "not_ready", label: "Not ready", bar: "bg-raf-slate", tone: "text-raf-slate" },
 ];
 
-const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
-const countdown = (iso) => {
-  if (!iso) return "";
-  const days = Math.ceil((new Date(iso) - new Date()) / 86400000);
-  if (days <= 0) return "now";
-  const m = Math.floor(days / 30), d = days % 30;
-  if (m >= 1) return `about ${m} month${m !== 1 ? "s" : ""}${d ? `, ${d} day${d !== 1 ? "s" : ""}` : ""}`;
-  return `${days} day${days !== 1 ? "s" : ""}`;
-};
+const fmtDate = (iso) => iso
+  ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+  : "";
+
+const ActionSummary = ({ label, count, icon: Icon, tone = "text-raf-blue" }) => (
+  <div className="bg-white border border-raf-sky p-4 flex items-center gap-3">
+    <div className="w-10 h-10 bg-raf-sky/50 grid place-items-center">
+      <Icon size={19} className={tone} />
+    </div>
+    <div>
+      <div className="text-2xl leading-none font-display font-bold text-raf-navy">{count ?? 0}</div>
+      <div className="text-xs text-raf-slate mt-1">{label}</div>
+    </div>
+  </div>
+);
+
+const ProgressStage = ({ title, sentAt, blocked, blockedText, onMark, onClear, children }) => (
+  <div className={`border p-3 ${sentAt ? "border-emerald-200 bg-emerald-50/40" : "border-raf-sky bg-white"}`}>
+    <div className="flex items-start gap-2">
+      {sentAt
+        ? <CheckCircle2 size={17} className="text-emerald-700 mt-0.5 shrink-0" />
+        : <span className="w-[17px] h-[17px] rounded-full border border-raf-slate/50 mt-0.5 shrink-0" />}
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-bold text-raf-navy">{title}</div>
+        {sentAt && <div className="text-[11px] text-emerald-700 mt-0.5">Sent {fmtDate(sentAt)}</div>}
+        {!sentAt && blocked && <div className="text-[11px] text-raf-slate mt-0.5">{blockedText}</div>}
+      </div>
+    </div>
+    {!blocked && (
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {children || (!sentAt ? (
+          <button onClick={onMark} className="px-2.5 py-1.5 text-[11px] font-semibold bg-raf-blue text-white hover:bg-raf-navy">
+            Mark sent
+          </button>
+        ) : null)}
+        {sentAt && onClear && (
+          <button onClick={onClear} className="px-2 py-1 text-[10px] text-raf-slate hover:text-raf-red underline">
+            Undo
+          </button>
+        )}
+      </div>
+    )}
+  </div>
+);
 
 export const RecruitmentPanel = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState("uncategorised");
+  const [busyId, setBusyId] = useState("");
   const [prefill, setPrefill] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
-  const [emailFor, setEmailFor] = useState(null); // { enquiry?, bucket, bulk? }
+  const [emailFor, setEmailFor] = useState(null);
   const [note, setNote] = useState("");
   const [attachments, setAttachments] = useState([]);
   const [uploading, setUploading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const fileRef = useRef(null);
 
   const load = useCallback(async () => {
-    try { const { data } = await api.get("/enquiries/tracker"); setData(data); }
-    finally { setLoading(false); }
+    try {
+      const { data: tracker } = await api.get("/recruitment/tracker");
+      setData(tracker);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not load recruitment tracker.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
   useEffect(() => { load(); }, [load]);
+
+  const patch = async (enquiry, body, successMessage) => {
+    setBusyId(enquiry.id);
+    try {
+      await api.patch(`/recruitment/enquiries/${enquiry.id}`, body);
+      if (successMessage) toast.success(successMessage);
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not update recruitment record.");
+    } finally {
+      setBusyId("");
+    }
+  };
 
   const createAccount = (e) => {
     const [first, ...rest] = e.name.trim().split(" ");
@@ -55,8 +111,10 @@ export const RecruitmentPanel = () => {
     setFormOpen(true);
   };
 
-  const openEmail = (enquiry, bucket, bulk = false) => {
-    setEmailFor({ enquiry, bucket, bulk }); setNote(""); setAttachments([]);
+  const openJoiningEmail = (e) => {
+    setEmailFor(e);
+    setNote("");
+    setAttachments([]);
   };
 
   const uploadFiles = async (files) => {
@@ -65,202 +123,312 @@ export const RecruitmentPanel = () => {
       for (const f of files) {
         const fd = new FormData();
         fd.append("file", f);
-        const { data } = await api.post("/attachments", fd, { headers: { "Content-Type": "multipart/form-data" } });
-        setAttachments((a) => [...a, { id: data.id, filename: data.filename }]);
+        const { data: uploaded } = await api.post("/attachments", fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        setAttachments((current) => [...current, { id: uploaded.id, filename: uploaded.filename }]);
       }
-    } catch (err) { toast.error(err.response?.data?.detail || "Upload failed."); }
-    finally { setUploading(false); if (fileRef.current) fileRef.current.value = ""; }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
-  const sendEmail = async () => {
-    setBusy(true);
+  const sendJoiningEmail = async () => {
+    if (!emailFor) return;
+    setSending(true);
     try {
-      const bucket = emailFor.bucket;
-      const ids = attachments.map((a) => a.id);
-      if (emailFor.bulk) {
-        const { data: res } = await api.post("/enquiries/recruit-email/bulk",
-          { eligibility: bucket.key, note, attachment_ids: ids, base_url: BASE_URL });
-        toast.success(`${res.sent} email(s) sent.`, { description: res.skipped ? `${res.skipped} skipped (missing details).` : undefined });
-      } else {
-        const { data: res } = await api.post(`/enquiries/${emailFor.enquiry.id}/recruit-email`,
-          { kind: bucket.kind, note, attachment_ids: ids, base_url: BASE_URL });
-        if (res.email_status === "error") { toast.error("Could not send the email. Please try again."); return; }
-        const name = emailFor.enquiry.name;
-        toast.success(bucket.kind === "joining"
-          ? `Joining instructions emailed to ${name}.`
-          : `Countdown email sent to ${name}.`,
-          { description: bucket.kind === "countdown" ? `They can join from ${fmtDate(res.eligible_date)}.` : undefined });
+      const { data: result } = await api.post(`/recruitment/enquiries/${emailFor.id}/joining-email`, {
+        note,
+        attachment_ids: attachments.map((a) => a.id),
+        base_url: BASE_URL,
+      });
+      if (result.email_status !== "sent") {
+        toast.error("The joining email was not sent. The tracker has not marked it as complete.");
+        return;
       }
-      setEmailFor(null); load();
-    } catch (err) { toast.error(err.response?.data?.detail || "Could not send email."); }
-    finally { setBusy(false); }
+      toast.success(`Joining instructions emailed to ${emailFor.name}.`, {
+        description: result.documents_sent
+          ? "Joining documents were attached and have also been marked as sent."
+          : "No documents were attached; the documents stage is still outstanding.",
+      });
+      setEmailFor(null);
+      await load();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Could not send joining instructions.");
+    } finally {
+      setSending(false);
+    }
   };
 
-  const handleBulk = (bucket) => {
-    const list = data?.buckets?.[bucket.key] || [];
-    if (list.length === 0) return;
-    if (bucket.kind === "joining") { openEmail(null, bucket, true); return; }
-    if (!window.confirm(`Send a countdown email to all ${list.length} prospect(s) in "${bucket.label}"?`)) return;
-    api.post("/enquiries/recruit-email/bulk", { eligibility: bucket.key, note: "", base_url: BASE_URL })
-      .then(({ data: res }) => { toast.success(`${res.sent} email(s) sent.`, { description: res.skipped ? `${res.skipped} skipped (missing details).` : undefined }); load(); })
-      .catch((err) => toast.error(err.response?.data?.detail || "Could not send emails."));
-  };
-
-  if (loading) return <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>;
+  if (loading) {
+    return <div className="flex items-center gap-2 text-raf-slate p-10 justify-center"><Loader2 className="animate-spin" /> Loading...</div>;
+  }
 
   const counts = data?.counts || {};
-  const followUps = data?.follow_up?.age_mismatch || [];
+  const actions = data?.action_counts || {};
+  const shown = activeCategory === "all"
+    ? CATEGORIES.flatMap((c) => data?.buckets?.[c.key] || [])
+    : (data?.buckets?.[activeCategory] || []);
+
   return (
     <div>
-      <PanelHeading title="Recruitment tracker" intro="Prospective cadets from the website, grouped by when they can join. Message joining instructions to those eligible now, or send a countdown to those waiting." />
+      <PanelHeading
+        title="Recruitment tracker"
+        intro="Categorise every prospective cadet first, then track the open-evening invitation, joining instructions and joining documents as separate steps."
+      />
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {BUCKETS.map((b) => {
-          const list = data?.buckets?.[b.key] || [];
+      <div className="mb-5 border-l-4 border-raf-blue bg-raf-sky/35 px-4 py-3 text-sm text-raf-slate">
+        For the current intake, prospects who have not started Year 8 this year should be placed in <strong className="text-raf-navy">September 2028</strong>. New enquiries remain uncategorised until a member of staff confirms the correct category.
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+        <ActionSummary label="Need categorising" count={actions.needs_categorising} icon={AlertTriangle} tone="text-amber-700" />
+        <ActionSummary label="Open-evening invites outstanding" count={actions.needs_open_evening_invite} icon={Mail} />
+        <ActionSummary label="Joining instructions outstanding" count={actions.needs_joining_instructions} icon={Send} />
+        <ActionSummary label="Joining documents outstanding" count={actions.needs_joining_documents} icon={Paperclip} />
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-5" aria-label="Recruitment categories">
+        <button
+          onClick={() => setActiveCategory("all")}
+          className={`px-3 py-2 text-xs font-bold border ${activeCategory === "all" ? "bg-raf-navy text-white border-raf-navy" : "bg-white text-raf-blue border-raf-sky"}`}
+        >
+          All ({data?.total ?? 0})
+        </button>
+        {CATEGORIES.map((category) => (
+          <button
+            key={category.key}
+            data-testid={`recruitment-filter-${category.key}`}
+            onClick={() => setActiveCategory(category.key)}
+            className={`px-3 py-2 text-xs font-bold border ${activeCategory === category.key ? "bg-raf-navy text-white border-raf-navy" : "bg-white text-raf-blue border-raf-sky"}`}
+          >
+            {category.label} ({counts[category.key] ?? 0})
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-4">
+        {shown.length === 0 ? (
+          <div className="bg-white border border-raf-sky p-10 text-center text-sm text-raf-slate">No enquiries in this category.</div>
+        ) : shown.map((e) => {
+          const readyNow = e.recruitment_category === "ready_now";
+          const canInvite = ["ready_now", "september_2028"].includes(e.recruitment_category);
+          const categorised = e.recruitment_category !== "uncategorised";
+          const inviteSent = !!e.open_evening_invite_sent_at;
+          const instructionsSent = !!e.joining_instructions_sent_at;
+          const documentsSent = !!e.joining_documents_sent_at;
+          const busy = busyId === e.id;
+
           return (
-            <div key={b.key} data-testid={`bucket-${b.key}`} className="bg-white border border-white">
-              <div className={`h-1 ${b.bar}`} />
-              <div className="p-4 border-b border-raf-sky flex items-center gap-2">
-                <b.icon size={18} className={b.tone} />
-                <h3 className="font-display font-bold text-raf-navy">{b.label}</h3>
-                <span data-testid={`bucket-count-${b.key}`} className="ml-auto text-sm font-bold text-raf-slate">{counts[b.key] ?? 0}</span>
-              </div>
-              {list.length > 0 && (
-                <div className="px-4 pt-3">
-                  <button data-testid={`bucket-email-all-${b.key}`} onClick={() => handleBulk(b)} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs bg-raf-navy text-white hover:bg-raf-blue transition-colors">
-                    <MailCheck size={13} /> {b.bulkCta} ({list.length})
-                  </button>
-                </div>
-              )}
-              <div className="p-4 space-y-3 min-h-[120px]">
-                {list.length === 0 ? (
-                  <p className="text-xs text-raf-slate text-center py-6">No enquiries here.</p>
-                ) : list.map((e) => (
-                  <div key={e.id} data-testid={`prospect-${e.id}`} className="border border-raf-sky p-3">
-                    <div className="font-semibold text-raf-navy text-sm">{e.name}</div>
-                    <div className="text-xs text-raf-slate mt-1">{e.age_band_label}</div>
-                    <div className="mt-2 flex flex-col gap-1 text-xs text-raf-slate">
-                      <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1 hover:text-raf-blue"><Mail size={12} /> {e.email}</a>
-                      {e.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {e.phone}</span>}
-                      {e.dob && <span>DoB: {new Date(e.dob).toLocaleDateString("en-GB")}</span>}
-                      {b.key !== "now" && e.eligible_date && (
-                        <span className={`font-semibold ${b.tone}`}>Can join {fmtDate(e.eligible_date)} · {countdown(e.eligible_date)} to go</span>
-                      )}
+            <div key={e.id} data-testid={`recruitment-prospect-${e.id}`} className="bg-white border border-raf-sky">
+              <div className={`h-1 ${CATEGORIES.find((c) => c.key === e.recruitment_category)?.bar || "bg-raf-slate"}`} />
+              <div className="p-4 lg:p-5">
+                <div className="flex flex-col lg:flex-row lg:items-start gap-4">
+                  <div className="lg:w-[280px] shrink-0">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0">
+                        <h3 className="font-display font-bold text-raf-navy text-lg leading-tight">{e.name}</h3>
+                        <div className="text-xs text-raf-slate mt-1">Enquired {fmtDate(e.created_at)}</div>
+                      </div>
+                      {e.age_mismatch && <AlertTriangle size={17} className="text-amber-600 shrink-0" title={e.age_mismatch_reason || "Age details need review"} />}
                     </div>
-                    {e.last_recruit_email && (
-                      <div className="mt-1 text-[10px] text-emerald-700 inline-flex items-center gap-1"><MailCheck size={11} /> {e.last_recruit_email.kind} email sent</div>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button data-testid={`prospect-email-${e.id}`} onClick={() => openEmail(e, b)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-raf-red text-white hover:bg-[#A00926] transition-colors">
-                        <Send size={12} /> {b.cta}
-                      </button>
-                      <button data-testid={`prospect-create-${e.id}`} onClick={() => createAccount(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-raf-blue text-white hover:bg-raf-navy transition-colors">
-                        <UserPlus size={12} /> Create account
-                      </button>
+
+                    <div className="mt-3 space-y-1 text-xs text-raf-slate">
+                      <a href={`mailto:${e.email}`} className="flex items-center gap-1.5 hover:text-raf-blue"><Mail size={12} /> {e.email}</a>
+                      {e.phone && <div className="flex items-center gap-1.5"><Phone size={12} /> {e.phone}</div>}
+                      {e.dob && <div>DoB: {fmtDate(e.dob)}</div>}
+                      {e.age_band_label && <div>{e.age_band_label}</div>}
                     </div>
                   </div>
-                ))}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="mb-4">
+                      <label className="block text-[11px] uppercase tracking-wide font-bold text-raf-slate mb-1.5">Recruitment category</label>
+                      <div className="flex flex-wrap gap-2">
+                        {CATEGORIES.filter((c) => c.key !== "uncategorised").map((category) => (
+                          <button
+                            key={category.key}
+                            disabled={busy}
+                            onClick={() => patch(e, { recruitment_category: category.key }, `${e.name} moved to ${category.label}.`)}
+                            className={`px-3 py-1.5 text-xs font-semibold border transition-colors disabled:opacity-50 ${e.recruitment_category === category.key ? "bg-raf-navy text-white border-raf-navy" : "bg-white text-raf-blue border-raf-sky hover:border-raf-blue"}`}
+                          >
+                            {category.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {!categorised ? (
+                      <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                        Select Ready now, September 2028 or Not ready before progressing this enquiry.
+                      </div>
+                    ) : e.recruitment_category === "not_ready" ? (
+                      <div className="border border-raf-sky bg-raf-sky/25 px-4 py-3 text-xs text-raf-slate">
+                        This enquiry is retained for reference but has no active recruitment actions.
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <ProgressStage
+                          title="1. Open-evening invite"
+                          sentAt={e.open_evening_invite_sent_at}
+                          blocked={!canInvite}
+                          blockedText="Not applicable to this category."
+                          onMark={() => patch(e, { open_evening_invite_sent: true }, `Open-evening invite recorded for ${e.name}.`)}
+                          onClear={() => patch(e, { open_evening_invite_sent: false })}
+                        />
+
+                        <ProgressStage
+                          title="2. Joining instructions"
+                          sentAt={e.joining_instructions_sent_at}
+                          blocked={!readyNow || !inviteSent}
+                          blockedText={!readyNow ? "Available when categorised Ready now." : "Record the open-evening invite first."}
+                          onClear={() => patch(e, { joining_instructions_sent: false })}
+                        >
+                          {!instructionsSent && (
+                            <>
+                              <button
+                                onClick={() => openJoiningEmail(e)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold bg-raf-red text-white hover:bg-[#A00926]"
+                              >
+                                <Send size={11} /> Email joining pack
+                              </button>
+                              <button
+                                disabled={busy}
+                                onClick={() => patch(e, { joining_instructions_sent: true }, `Joining instructions marked as sent for ${e.name}.`)}
+                                className="px-2.5 py-1.5 text-[11px] font-semibold border border-raf-blue text-raf-blue hover:bg-raf-sky/30 disabled:opacity-50"
+                              >
+                                Mark sent manually
+                              </button>
+                            </>
+                          )}
+                          {instructionsSent && (
+                            <button
+                              onClick={() => openJoiningEmail(e)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold border border-raf-blue text-raf-blue hover:bg-raf-sky/30"
+                            >
+                              <Send size={11} /> Email again
+                            </button>
+                          )}
+                        </ProgressStage>
+
+                        <ProgressStage
+                          title="3. Joining documents"
+                          sentAt={e.joining_documents_sent_at}
+                          blocked={!readyNow || !instructionsSent}
+                          blockedText={!readyNow ? "Available when categorised Ready now." : "Complete joining instructions first."}
+                          onMark={() => patch(e, { joining_documents_sent: true }, `Joining documents marked as sent for ${e.name}.`)}
+                          onClear={() => patch(e, { joining_documents_sent: false })}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-raf-sky flex flex-wrap items-center gap-2">
+                  {e.recruitment_category === "september_2028" && (
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-raf-blue"><CalendarClock size={13} /> Target intake: September 2028</span>
+                  )}
+                  <span className="flex-1" />
+                  {readyNow && (
+                    <button
+                      onClick={() => createAccount(e)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-raf-blue text-white hover:bg-raf-navy"
+                    >
+                      <UserPlus size={12} /> Create cadet account
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
         })}
       </div>
 
-      <div className="mt-6 bg-white border border-amber-200" data-testid="follow-up-age-mismatch">
-        <div className="h-1 bg-amber-500" />
-        <div className="p-4 border-b border-amber-200 flex items-center gap-2">
-          <AlertTriangle size={18} className="text-amber-700" />
-          <h3 className="font-display font-bold text-raf-navy">Follow Up - Age Mismatch</h3>
-          <span className="ml-auto text-sm font-bold text-raf-slate">{data?.follow_up_counts?.age_mismatch ?? 0}</span>
-        </div>
-        <div className="p-4 space-y-3 min-h-[96px]">
-          {followUps.length === 0 ? (
-            <p className="text-xs text-raf-slate text-center py-4">No mismatches currently flagged.</p>
-          ) : followUps.map((e) => (
-            <div key={`mismatch-${e.id}`} className="border border-amber-200 bg-amber-50/40 p-3" data-testid={`age-mismatch-${e.id}`}>
-              <div className="font-semibold text-raf-navy text-sm">{e.name}</div>
-              <div className="mt-1 text-xs text-raf-slate">
-                Selected: <strong>{e.age_band_label || e.age_band}</strong>
-                {" · "}
-                DoB suggests: <strong>{e.expected_age_band_label || e.expected_age_band || "Needs review"}</strong>
-              </div>
-              {e.age_mismatch_reason && (
-                <div className="mt-1 text-xs text-amber-800">{e.age_mismatch_reason}</div>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-raf-slate">
-                <a href={`mailto:${e.email}`} className="inline-flex items-center gap-1 hover:text-raf-blue"><Mail size={12} /> {e.email}</a>
-                {e.phone && <span className="inline-flex items-center gap-1"><Phone size={12} /> {e.phone}</span>}
-                {e.dob && <span>DoB: {new Date(e.dob).toLocaleDateString("en-GB")}</span>}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button onClick={() => createAccount(e)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-raf-blue text-white hover:bg-raf-navy transition-colors">
-                  <UserPlus size={12} /> Create account
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Recruit email dialog */}
-      <Dialog open={!!emailFor} onOpenChange={(o) => !o && setEmailFor(null)}>
-        <DialogContent data-testid="recruit-email-dialog" className="max-w-md rounded-none">
+      <Dialog open={!!emailFor} onOpenChange={(open) => !open && setEmailFor(null)}>
+        <DialogContent data-testid="joining-email-dialog" className="max-w-md rounded-none">
           <DialogHeader>
-            <DialogTitle className="font-display text-raf-navy">{emailFor?.bucket.kind === "joining" ? "Send joining instructions" : "Send countdown email"}</DialogTitle>
-            <DialogDescription className="sr-only">Send a recruitment email to this prospect</DialogDescription>
+            <DialogTitle className="font-display text-raf-navy">Send joining instructions</DialogTitle>
+            <DialogDescription>
+              {emailFor ? `Email ${emailFor.name}. Attach the joining documents here if you want both stages completed automatically.` : ""}
+            </DialogDescription>
           </DialogHeader>
+
           {emailFor && (
-            <div className="space-y-3 text-sm">
-              {emailFor.bulk ? (
-                <p className="text-raf-slate">This will email <strong className="text-raf-navy">all {data?.buckets?.[emailFor.bucket.key]?.length || 0} prospect(s)</strong> in &ldquo;{emailFor.bucket.label}&rdquo;.</p>
-              ) : (
-                <p className="text-raf-slate">To <strong className="text-raf-navy">{emailFor.enquiry.name}</strong> ({emailFor.enquiry.email})</p>
-              )}
-              {emailFor.bucket.kind === "countdown" && !emailFor.bulk && emailFor.enquiry.eligible_date && (
-                <div className="bg-raf-sky/50 border-l-4 border-raf-blue p-3 text-raf-slate">
-                  Countdown to <strong>{fmtDate(emailFor.enquiry.eligible_date)}</strong> — {countdown(emailFor.enquiry.eligible_date)} to go.
-                </div>
-              )}
+            <div className="space-y-4 text-sm">
               <div>
-                <label className="block text-xs font-semibold text-raf-navy mb-1">Add a personal note (optional)</label>
-                <textarea data-testid="recruit-note" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. We look forward to meeting you on Thursday!" className="w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm" />
+                <label className="block text-xs font-semibold text-raf-navy mb-1">Personal note (optional)</label>
+                <textarea
+                  rows={3}
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  placeholder="e.g. It was great to meet you at our open evening."
+                  className="w-full border border-raf-sky px-3 py-2.5 outline-none focus:border-raf-blue text-sm"
+                />
               </div>
 
-              {emailFor.bucket.kind === "joining" && (
-                <div data-testid="attachment-section">
-                  <label className="block text-xs font-semibold text-raf-navy mb-1">Attachments (e.g. joining form, welcome pack)</label>
-                  <input ref={fileRef} type="file" multiple data-testid="attachment-input" className="hidden" onChange={(e) => uploadFiles(Array.from(e.target.files || []))} />
-                  <button type="button" data-testid="attachment-add" onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-raf-sky text-raf-blue hover:border-raf-blue transition-colors disabled:opacity-60">
-                    {uploading ? <Loader2 className="animate-spin" size={13} /> : <Paperclip size={13} />} Add file
-                  </button>
-                  {attachments.length > 0 && (
-                    <ul className="mt-2 space-y-1" data-testid="attachment-list">
-                      {attachments.map((a) => (
-                        <li key={a.id} className="flex items-center gap-2 text-xs bg-raf-sky/40 px-2 py-1.5">
-                          <Paperclip size={12} className="text-raf-blue" />
-                          <span className="truncate text-raf-navy">{a.filename}</span>
-                          <button type="button" onClick={() => setAttachments((x) => x.filter((y) => y.id !== a.id))} className="ml-auto text-raf-red hover:text-raf-navy"><X size={13} /></button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="mt-1 text-xs text-raf-slate">Files are sent as secure download links in the email. Max 15MB each.</p>
-                </div>
-              )}
-              {emailFor.bucket.kind !== "joining" && (
-                <p className="text-xs text-raf-slate">The rest of the email (the countdown and squadron details) is added automatically.</p>
-              )}
+              <div>
+                <label className="block text-xs font-semibold text-raf-navy mb-1">Joining documents (optional)</label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => uploadFiles(Array.from(event.target.files || []))}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs border border-raf-sky text-raf-blue hover:border-raf-blue disabled:opacity-60"
+                >
+                  {uploading ? <Loader2 className="animate-spin" size={13} /> : <Paperclip size={13} />} Add file
+                </button>
+
+                {attachments.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {attachments.map((attachment) => (
+                      <li key={attachment.id} className="flex items-center gap-2 text-xs bg-raf-sky/40 px-2 py-1.5">
+                        <Paperclip size={12} className="text-raf-blue" />
+                        <span className="truncate text-raf-navy">{attachment.filename}</span>
+                        <button
+                          type="button"
+                          onClick={() => setAttachments((current) => current.filter((item) => item.id !== attachment.id))}
+                          className="ml-auto text-raf-red hover:text-raf-navy"
+                        >
+                          <X size={13} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="mt-1 text-[11px] text-raf-slate">
+                  If one or more files are attached and the email sends successfully, both Joining instructions and Joining documents are timestamped automatically.
+                </p>
+              </div>
             </div>
           )}
+
           <DialogFooter>
-            <button data-testid="recruit-email-send" onClick={sendEmail} disabled={busy} className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] transition-colors disabled:opacity-60">
-              {busy ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />} Send email
+            <button
+              onClick={sendJoiningEmail}
+              disabled={sending || uploading}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-raf-red text-white font-semibold hover:bg-[#A00926] disabled:opacity-60"
+            >
+              {sending ? <Loader2 className="animate-spin" size={16} /> : <MailCheck size={16} />} Send email
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <UserFormDialog open={formOpen} onClose={() => setFormOpen(false)} onSaved={() => toast.success("Cadet account ready — they can now sign in.")} prefill={prefill} />
+      <UserFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSaved={() => toast.success("Cadet account ready — they can now sign in.")}
+        prefill={prefill}
+      />
     </div>
   );
 };
