@@ -52,9 +52,10 @@ def _category(e: dict) -> str:
 
 
 def _sent_at(e: dict, field: str) -> Optional[str]:
-    value = e.get(field)
-    if value:
-        return value
+    # An explicit field (including None) wins.  This lets staff undo a legacy
+    # inferred status without the old email record immediately re-marking it.
+    if field in e:
+        return e.get(field) or None
 
     # Preserve useful history from the recruitment email feature that existed
     # before this workflow.  We can reliably infer joining instructions, but we
@@ -171,6 +172,16 @@ async def update_recruitment_progress(
     set_fields = {}
     history = []
     now = legacy.now_iso()
+
+    requested_category = (payload.recruitment_category or _category(existing)).strip().lower()
+    if requested_category not in RECRUITMENT_CATEGORIES:
+        raise HTTPException(status_code=400, detail="Invalid recruitment category")
+    if payload.open_evening_invite_sent is True and requested_category not in {"ready_now", "september_2028"}:
+        raise HTTPException(status_code=400, detail="Open-evening invitations can only be recorded for active recruitment categories")
+    if payload.joining_instructions_sent is True and requested_category != "ready_now":
+        raise HTTPException(status_code=400, detail="Joining instructions can only be recorded for Ready now enquiries")
+    if payload.joining_documents_sent is True and requested_category != "ready_now":
+        raise HTTPException(status_code=400, detail="Joining documents can only be recorded for Ready now enquiries")
 
     if payload.recruitment_category is not None:
         category = payload.recruitment_category.strip().lower()
